@@ -1,0 +1,14 @@
+FROM flwr/superexec:1.34.0
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY uv.lock ./
+COPY flower_app ./flower_app
+
+RUN sed -i '/"flwr>=/d' pyproject.toml \
+    && python -m pip install --no-cache-dir .
+
+COPY data ./data
+
+ENTRYPOINT ["flower-superexec"]

@@ -1,0 +1,8 @@
+.git
+.venv
+__pycache__
+output
+*.pyc
+*.pyo
+*.egg-info
+.conda

@@ -1,0 +1,82 @@
+services:
+  superlink:
+    image: flwr/superlink:1.34.0
+    command: >-
+      --insecure 
+      --isolation process
+    ports:
+      - "9091:9091"
+      - "9092:9092"
+      - "9093:9093"
+    networks:
+      - flwr-network
+
+  supernode-1:
+    image: flwr/supernode:1.34.0
+    command: >-
+      --superlink superlink:9092
+      --insecure
+      --node-config "partition-id=0 num-partitions=2"
+      --isolation process
+    ports:
+      - "9094:9094"
+    depends_on:
+      - superlink
+    networks:
+      - flwr-network
+
+  supernode-2:
+    image: flwr/supernode:1.34.0
+    command: >-
+      --superlink superlink:9092
+      --insecure
+      --node-config "partition-id=1 num-partitions=2"
+      --isolation process
+    ports:
+      - "9095:9095"
+    depends_on:
+      - superlink
+    networks:
+      - flwr-network
+
+  superexec-serverapp:
+    build:
+      context: .
+      dockerfile: Containerfile.superexec
+    image: pyhealth-flower-superexec:0.1.0
+    command: >-
+      --insecure
+      --plugin-type serverapp
+      --appio-api-address superlink:9091
+    depends_on:
+      - superlink
+    networks:
+      - flwr-network
+
+  superexec-clientapp-1:
+    image: pyhealth-flower-superexec:0.1.0
+    command: >-
+      --insecure
+      --plugin-type clientapp
+      --appio-api-address supernode-1:9094
+    depends_on:
+      - supernode-1
+      - superexec-serverapp
+    networks:
+      - flwr-network
+
+  superexec-clientapp-2:
+    image: pyhealth-flower-superexec:0.1.0
+    command: >-
+      --insecure
+      --plugin-type clientapp
+      --appio-api-address supernode-2:9095
+    depends_on:
+      - supernode-2
+      - superexec-serverapp
+    networks:
+      - flwr-network
+
+networks:
+  flwr-network:
+    driver: bridge
