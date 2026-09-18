@@ -1,199 +1,206 @@
 # PyHealth Federated Learning
 
-Aplicacao experimental de Federated Learning usando [Flower](https://flower.ai/), [PyHealth](https://pyhealth.readthedocs.io/) e PyTorch. A topologia de execucao foi preparada para o runtime de deployment do Flower com Podman.
+Arcabouço de referência para **aprendizado federado em saúde**, aplicado ao
+**alerta antecipado de deterioração clínica**. Construído sobre
+[Flower](https://flower.ai/) (federação), [PyHealth](https://pyhealth.readthedocs.io/)
+(pipeline clínico) e PyTorch.
+
+O objetivo é treinar um modelo de alerta sem centralizar prontuários: cada
+instituição treina localmente e apenas **pesos de modelo** e **métricas
+agregadas** trafegam.
+
+```
+Pesos + métricas  →→→  agregação  →→→  novo modelo global
+       ↑                                        ↓
+   hospital A                              hospital B
+   (dados ficam aqui)                  (dados ficam aqui)
+```
+
+## Sumário
+
+- [Estado atual](#estado-atual)
+- [Início rápido](#início-rápido)
+- [Estrutura do repositório](#estrutura-do-repositório)
+- [Os dois runtimes](#os-dois-runtimes)
+- [Conceitos e referências](#conceitos-e-referências)
+- [Dados](#dados)
+- [Documentação](#documentação)
+- [Limitações](#limitações)
+- [Licença](#licença)
 
 ## Estado atual
 
-Os componentes Flower estao em `flower_app/`:
+| Capacidade | Situação |
+| --- | :---: |
+| Pipeline PyHealth ponta a ponta (MIMIC-IV demo) | ✅ |
+| Federação real com partições distintas por nó | ✅ |
+| Agregação **FedAvg** / **FedProx** | ✅ |
+| Particionamento IID e **non-IID** (`label-skew`) | ✅ |
+| **Privacidade diferencial** (DP central, mecanismos oficiais do Flower) | ✅ |
+| **Explicabilidade** (suíte `pyhealth.interpret`) | ✅ |
+| Simulação local (**Ray**) e deployment em **contêineres** | ✅ |
+| Baseline centralizado para comparação | ✅ |
+| Suíte de testes (51 testes) | ✅ |
+| Agregação segura | ❌ |
+| Split Learning | ❌ |
+| TLS habilitado no deployment (hoje `--insecure`) | ⚠️ |
 
-- `flower_app/server_app.py`: inicializa o modelo global e executa a estrategia `FedAvg`.
-- `flower_app/client_app.py`: recebe os pesos globais, treina na particao local e devolve pesos e metricas.
-- `flower_app/task.py`: carrega os dados, divide pacientes e constroi o modelo.
+Detalhamento honesto do que não está pronto: [Limitações](#limitações).
 
-Atencao: a implementacao atual de `flower_app/task.py` usa o dataset sintetico MIMIC-III remoto do PyHealth e o modelo `Transformer`. A pasta `data/` deste repositorio contem arquivos MIMIC-IV locais, mas eles nao sao usados pelo codigo atual. Para usar esses CSVs, sera necessario adaptar `task.py` para `MIMIC4Dataset` e para o formato de arquivos existente.
+## Início rápido
 
-## Estrutura
+```bash
+# 1. Ambiente (uma vez). Requer Python 3.13 e uv.
+uv sync
+
+# 2. Federação simulada, com 2 nós e 2 rodadas
+scripts/simulate.sh
+
+# 3. Testes
+scripts/test.sh all
+```
+
+Nenhum dado credenciado é necessário: o **MIMIC-IV Clinical Database Demo** está
+versionado em `data/` e é de redistribuição livre (ODbL v1.0).
+
+### O que você deve ver
+
+```text
+[client] node 0/2 scheme=uniform train=43 val=2 test=21
+[client] node 1/2 scheme=uniform train=36 val=6 test=21
+[server] strategy=fedavg dp=none clients=2 rounds=2
+```
+
+Duas leituras importantes:
+
+* `train` **diferente** entre os nós → as partições são distintas, a federação é
+  real e não um exercício em que todos treinam sobre os mesmos dados;
+* `test` **igual** em todos → é o hold-out compartilhado, nunca treinado, que
+  torna comparáveis o modelo federado e o centralizado.
+
+## Estrutura do repositório
 
 ```text
 .
-├── flower_app/
-│   ├── __init__.py
-│   ├── client_app.py
-│   ├── server_app.py
-│   └── task.py
-├── data/
-│   ├── hosp/                 # CSVs MIMIC-IV hospitalares
-│   └── icu/                  # CSVs MIMIC-IV de UTI
-├── output/                   # Saidas e checkpoints locais
-├── Containerfile.superexec  # Imagem dos ServerApp/ClientApps
-├── podman-compose.yml       # SuperLink, SuperNodes e SuperExecs
-├── pyproject.toml            # Dependencias e configuracao Flower
-├── uv.lock                  # Lockfile gerado pelo uv, se versionado
-└── PODMAN.md                # Referencia detalhada do deployment
+├── flower_app/                    # A aplicação Flower (o comportamento)
+│   ├── server_app.py              #   ServerApp: estratégia + DP
+│   ├── client_app.py              #   ClientApp: treino/avaliação local
+│   ├── task.py                    #   Dados PyHealth + particionamento por paciente
+│   ├── model.py                   #   Arquitetura + termo proximal do FedProx
+│   ├── strategies.py              #   FedAvg / FedProx
+│   ├── privacy.py                 #   DP (mecanismos oficiais do Flower)
+│   └── explain.py                 #   XAI (suíte do PyHealth)
+├── libs/
+│   └── federation_contracts/      # O que as instituições acordam (versionado)
+├── env/                           # Onde cada componente roda
+│   ├── podman/                    #   TLS e material do runtime de deployment
+│   └── incus/                     #   Topologia de unidades + inventário de portas
+├── docs/                          # Arquitetura, simulação, deployment, governança
+├── scripts/                       # Pontos de entrada para operação
+├── tests/                         # Suíte de testes
+├── data/                          # MIMIC-IV demo (ODbL) — ver governança
+├── podman-compose.yml             # Topologia de deployment
+├── Containerfile.superexec        # Imagem dos ServerApp/ClientApps
+└── pyproject.toml                 # Dependências, entrypoints e configuração Flower
 ```
 
-Arquivos como `.venv/`, `__pycache__/`, `build/`, `dist/` e `output/` sao artefatos locais e nao fazem parte da aplicacao distribuida.
+A separação é deliberada: `flower_app/` é o **comportamento**, `libs/` é o
+**acordo** e `env/` é a **execução**. Mudar a estratégia de agregação não toca em
+`libs/` nem em `env/`.
 
-## Configuracao Flower
+## Os dois runtimes
 
-O `pyproject.toml` define os entrypoints:
+O mesmo código roda de duas formas. Isso é possível porque a aplicação usa o
+modelo `ServerApp`/`ClientApp` do Flower, cujos objetos são idênticos nos dois
+casos.
 
-```toml
-[tool.flwr.app.components]
-serverapp = "flower_app.server_app:app"
-clientapp = "flower_app.client_app:app"
-```
+| | Simulação (Ray) | Deployment (contêineres) |
+| --- | --- | --- |
+| Comando | `scripts/simulate.sh` | `scripts/deploy_containers.sh up` + `run` |
+| Nós | Processos Ray locais | SuperLink + SuperNodes + SuperExecs |
+| Uso | Experimentos, varredura de configuração | Validar comunicação; base do rollout |
+| Custo | Baixo | Requer Podman |
+| Guia | [`docs/SIMULATION.md`](docs/SIMULATION.md) | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
 
-A configuracao padrao e:
-
-| Parametro | Valor | Descricao |
-| --- | ---: | --- |
-| `num-server-rounds` | `3` | Numero de rodadas FedAvg |
-| `local-epochs` | `2` | Epocas locais por rodada |
-| `learning-rate` | `0.00001` | Taxa de aprendizado enviada aos clientes |
-| `batch-size` | `256` | Tamanho do batch no cliente |
-| `num-partitions` | `2` | Numero de particoes esperadas |
-| `fraction-train` | `1.0` | Fracao de clientes no treino |
-| `fraction-evaluate` | `1.0` | Fracao de clientes na avaliacao |
-
-Esses valores podem ser sobrescritos sem editar arquivos:
+### Exemplos de experimento
 
 ```bash
-flwr run . --run-config "num-server-rounds=5 local-epochs=1"
+# Baseline: FedAvg sobre partições IID
+scripts/simulate.sh
+
+# Heterogeneidade patológica (cada nó vê uma classe só)
+ROUNDS=5 SCHEME=label-skew scripts/simulate.sh
+
+# FedProx contra essa heterogeneidade
+ROUNDS=5 SCHEME=label-skew STRATEGY=fedprox MU=0.1 scripts/simulate.sh
+
+# DP central
+DP_MODE=server-fixed-clipping DP_NOISE=1.0 scripts/simulate.sh
+
+# Comparação com o treino centralizado, no mesmo hold-out
+scripts/central_baseline.py --epochs 5
 ```
 
-## Requisitos
+## Conceitos e referências
 
-- Python `3.13`, conforme `.python-version`.
-- Podman.
-- Um provider para `podman compose`, como `podman-compose` ou Docker Compose.
-- Acesso de rede para baixar as imagens Flower e as dependencias.
+| Conceito | Onde | Referência |
+| --- | --- | --- |
+| **FedAvg** | `flower_app/strategies.py` | McMahan et al., *Communication-Efficient Learning of Deep Networks from Decentralized Data*, AISTATS 2017 — [arXiv:1602.05629](https://arxiv.org/abs/1602.05629) |
+| **FedProx** | `flower_app/model.py`, `strategies.py` | Li et al., *Federated Optimization in Heterogeneous Networks*, MLSys 2020 — [arXiv:1812.06127](https://arxiv.org/abs/1812.06127) |
+| **DP** | `flower_app/privacy.py` | McMahan et al., *Learning Differentially Private Recurrent Language Models*, ICLR 2018 — [arXiv:1710.06963](https://arxiv.org/abs/1710.06963) |
+| **PyHealth** | `flower_app/task.py` | [Documentação](https://pyhealth.readthedocs.io/) |
+| **Flower** | `flower_app/*_app.py` | [Documentação](https://flower.ai/docs/framework/) |
 
-O projeto possui dependencias declaradas no `pyproject.toml`: Flower, NumPy, PyHealth e PyTorch.
+## Dados
 
-## Ambiente com uv
+| Fonte | Situação | Onde |
+| --- | --- | --- |
+| **MIMIC-IV Demo** (100 pacientes) | Versionado, ODbL v1.0, redistribuição livre | `data/` |
+| **MIMIC-IV completo** | Credenciado — **nunca** versionar | `PYHEALTH_EHR_ROOT` |
+| **SESA-CE** | Proprietário (LGPD/HIPAA/GDPR) — **nunca** sai da unidade | fora do repositório |
 
-Para instalar e validar o ambiente com `uv`:
+Nunca cruza a fronteira do nó: amostras, `visit_id`, `patient_id`, mapas de
+atribuição de XAI e checkpoints. Apenas `ArrayRecord` (pesos) e `MetricRecord`
+(escalares) são serializados.
 
-```bash
-uv sync
-uv run python -m py_compile flower_app/*.py
-uv run flwr build
-```
+Regras completas e o procedimento de auditoria:
+[`docs/DATA_GOVERNANCE.md`](docs/DATA_GOVERNANCE.md).
 
-Para executar uma simulacao local do Flower, quando o ambiente local estiver configurado:
+## Documentação
 
-```bash
-uv run flwr run . --stream
-```
+| Documento | Conteúdo |
+| --- | --- |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Topologia, round federado, fronteira de dados, decisões e justificativas |
+| [`docs/SIMULATION.md`](docs/SIMULATION.md) | Simulação Ray: comandos, escala, cluster multi-nó, armadilhas |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Deployment em contêineres: topologia, portas, TLS, diagnóstico |
+| [`docs/DATA_GOVERNANCE.md`](docs/DATA_GOVERNANCE.md) | O que pode entrar no repositório e o que pode trafegar |
+| [`docs/STAKEHOLDERS.md`](docs/STAKEHOLDERS.md) | Guia para quem decide e usa, sem detalhe de implementação |
+| [`env/incus/PORTS.md`](env/incus/PORTS.md) | Inventário de serviços e portas expostas |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Como contribuir e o que o CI verifica |
+| [`COMMIT_POLICY.md`](COMMIT_POLICY.md) | Formato de commit, regras específicas do projeto e hooks de verificação |
+| [`SECURITY.md`](SECURITY.md) | Como reportar vulnerabilidades e segredos |
 
-## Ambiente com Conda
+## Limitações
 
-O Conda pode ser usado como ambiente interativo, mas nao e copiado para os containers. Ative o ambiente e instale o projeto usando o mesmo `pyproject.toml`:
+Declaradas explicitamente, porque um framework de pesquisa que esconde limites
+não é utilizável:
 
-```bash
-conda activate <seu-ambiente>
-python -m pip install -e .
-flwr build
-```
+1. **O demo tem 100 pacientes.** Após o split, o pool de validação tem 4
+   pacientes e o hold-out, 5. As métricas são ruidosas **por construção**: o demo
+   exercita o pipeline, não sustenta conclusão estatística.
+2. **DP é central.** O servidor vê as atualizações individuais antes de agregar.
+   Um cenário que não confie no servidor exige recorte no cliente mais agregação
+   segura — não implementada.
+3. **O deployment roda `--insecure`.** O material TLS é gerado por
+   `env/podman/certs.yml`, mas ainda não está em uso.
+4. **Sem Split Learning**, apesar de estar no plano de trabalho.
+5. **Sem validação clínica.** A engenharia foi exercitada; a utilidade clínica,
+   não.
+6. **Sem agregação segura**, então o servidor é um ponto de confiança.
 
-Nao misture pacotes instalados no Conda e no `.venv` sem verificar qual interpretador esta ativo:
+## Licença
 
-```bash
-python -c "import sys; print(sys.executable)"
-```
+Apache-2.0 — ver [`LICENSE`](LICENSE) e [`NOTICE`](NOTICE).
 
-## Execucao com Podman
-
-### 1. Verifique os arquivos de dados
-
-O dataset anexado esta organizado como MIMIC-IV:
-
-```text
-data/hosp/*.csv
-data/icu/*.csv
-```
-
-O `Containerfile.superexec` copia `data/` para `/app/data` dentro da imagem. Entretanto, no estado atual, `flower_app/task.py` usa o MIMIC-III sintetico remoto, portanto esses CSVs locais ainda nao entram no treinamento.
-
-### 2. Construa a imagem
-
-```bash
-podman build \
-	-f Containerfile.superexec \
-	-t pyhealth-flower-superexec:0.1.0 \
-	.
-```
-
-### 3. Inicie a topologia Flower
-
-```bash
-podman compose -f podman-compose.yml up -d --build
-```
-
-A composicao inicia:
-
-- um `SuperLink`;
-- dois `SuperNode`, com `partition-id=0` e `partition-id=1`;
-- um `SuperExec` para o `ServerApp`;
-- dois `SuperExec` para os `ClientApp`.
-
-### 4. Configure a conexao local
-
-No arquivo de configuracao do Flower, adicione uma conexao para o SuperLink:
-
-```toml
-[superlink.local-deployment]
-address = "127.0.0.1:9093"
-insecure = true
-```
-
-Depois submeta a aplicacao:
-
-```bash
-flwr run . local-deployment --stream
-```
-
-### 5. Acompanhe e encerre
-
-```bash
-podman compose -f podman-compose.yml logs -f
-podman compose -f podman-compose.yml down
-```
-
-## Portas
-
-| Porta | Uso |
-| ---: | --- |
-| `9091` | API de runtime do SuperLink |
-| `9092` | Conexao SuperNode-SuperLink |
-| `9093` | API de deployment usada pelo CLI Flower |
-| `9094` | Runtime do primeiro SuperNode |
-| `9095` | Runtime do segundo SuperNode |
-
-## Diagnostico
-
-Verifique os containers:
-
-```bash
-podman ps -a
-podman compose -f podman-compose.yml logs superlink
-podman compose -f podman-compose.yml logs supernode-1 supernode-2
-```
-
-Se `podman compose` informar que nenhum provider foi encontrado, instale `podman-compose` ou configure Docker Compose como provider.
-
-Se o treinamento reclamar de arquivos MIMIC-IV ausentes, confira se os arquivos estao em `data/hosp/` e `data/icu/`. A configuracao atual ainda espera o dataset sintetico MIMIC-III remoto definido em `flower_app/task.py`.
-
-## Limitacoes conhecidas
-
-- O `ClientApp` monitora `pr_auc`, mas o `Trainer` foi configurado com `roc_auc`, `f1` e `accuracy`. Antes de uma execucao de treino completa, alinhe esse monitor com uma metrica configurada ou adicione `pr_auc` a lista de metricas.
-- O valor `learning-rate` e enviado pelo `ServerApp`, mas o `ClientApp` atual nao passa explicitamente `optimizer_params` ao `Trainer`. Se a taxa definida no `pyproject.toml` precisar ser aplicada, ajuste o treino local.
-- O dataset MIMIC-IV local esta presente no container, mas ainda nao esta conectado ao pipeline atual. O uso do MIMIC-IV exige configurar `MIMIC4Dataset`, as tabelas `hosp/` e `icu/`, e as extensoes `.csv` reais.
-
-## Documentacao relacionada
-
-- [PODMAN.md](PODMAN.md): passos detalhados do deployment.
-- [Flower Framework](https://flower.ai/docs/framework/main/en/index.html).
-- [Flower Quickstart PyTorch](https://flower.ai/docs/framework/main/en/tutorial-quickstart-pytorch.html).
-- [PyHealth](https://pyhealth.readthedocs.io/en/latest/).
+O MIMIC-IV Demo em `data/` é distribuído sob **ODbL v1.0**
+([`data/LICENSE.txt`](data/LICENSE.txt)), não sob a Apache-2.0.

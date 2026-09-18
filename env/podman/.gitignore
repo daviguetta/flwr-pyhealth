@@ -1,0 +1,5 @@
+# Segredos e estado gerados localmente neste ambiente.
+# Nunca versionar: contem chaves privadas (ca.key, server.key) e o banco de
+# estado do SuperLink. Ver AGENTS.md (dados sensiveis / LGPD-HIPAA-GDPR).
+superlink-certificates/
+state/

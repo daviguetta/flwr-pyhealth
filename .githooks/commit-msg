@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+#
+# Valida a mensagem de commit contra COMMIT_POLICY.md.
+#
+# Habilitar (uma vez por clone):
+#   git config core.hooksPath .githooks
+#
+# Uso do argumento: o git passa o caminho do arquivo que contém a mensagem.
+#
+set -euo pipefail
+
+message_file="${1:-}"
+if [[ -z "$message_file" || ! -f "$message_file" ]]; then
+    echo "commit-msg: arquivo de mensagem não informado" >&2
+    exit 1
+fi
+
+# A primeira linha não vazia é o assunto. Linhas '#' são comentários do git.
+subject="$(grep -vE '^[[:space:]]*#' "$message_file" | sed '/^[[:space:]]*$/d' | head -n1)"
+
+# Mensagens geradas pelo git não seguem o formato do projeto.
+case "$subject" in
+    Merge\ *|Revert\ *|fixup!\ *|squash!\ *|amend!\ *)
+        exit 0
+        ;;
+esac
+
+types='feat|fix|docs|test|refactor|perf|build|ci|chore|revert'
+scopes='fed|data|privacy|xai|contracts|env|deps|docs|repo'
+pattern="^(${types})(\((${scopes})\))?!?: .+$"
+
+fail() {
+    cat >&2 <<EOF
+
+✖ commit-msg: mensagem fora da política (COMMIT_POLICY.md)
+
+  recebido: ${subject:-<vazio>}
+
+  formato:  <tipo>(<escopo>): <descrição no imperativo>
+
+  tipos:    feat fix docs test refactor perf build ci chore revert
+  escopos:  fed data privacy xai contracts env deps docs repo
+
+  Um escopo novo é uma decisão: adicione-o em COMMIT_POLICY.md e no hook
+  .githooks/commit-msg quando a área realmente existir.
+
+  exemplo:  fix(data): corrige partição por paciente para evitar vazamento
+
+  Regras que o hook verifica:
+    - tipo válido e, quando houver, escopo em minúsculas
+    - dois-pontos seguidos de espaço antes da descrição
+    - assunto com no máximo 72 caracteres
+    - sem ponto final
+    - descrição no imperativo ("corrige", não "corrigido" nem "corrigi")
+
+EOF
+    exit 1
+}
+
+if [[ -z "$subject" ]]; then
+    fail
+fi
+
+if ! [[ "$subject" =~ $pattern ]]; then
+    fail
+fi
+
+message_without_prefix="${subject#*: }"
+
+if (( ${#subject} > 72 )); then
+    echo "✖ commit-msg: assunto com ${#subject} caracteres (limite 72)" >&2
+    echo "  dica: mova o detalhe para o corpo do commit" >&2
+    exit 1
+fi
+
+if [[ "$message_without_prefix" == *. ]]; then
+    echo "✖ commit-msg: remova o ponto final do assunto" >&2
+    exit 1
+fi

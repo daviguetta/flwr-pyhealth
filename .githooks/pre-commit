@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+#
+# Bloqueia a entrada de material proibido no índice.
+#
+# Verifica fatos, não intenção: reconhece caminhos e extensões conhecidas de
+# segredo, certificado, checkpoint e dado novo fora do MIMIC-IV Demo. Não sabe
+# distinguir dado sintético de dado real — isso é responsabilidade de quem
+# commita. Ver docs/DATA_GOVERNANCE.md e SECURITY.md.
+#
+# Habilitar (uma vez por clone):
+#   git config core.hooksPath .githooks
+#
+set -euo pipefail
+
+MAX_BYTES=$((50 * 1024 * 1024))
+
+fail() {
+    echo "" >&2
+    echo "✖ pre-commit: $1" >&2
+    shift
+    for line in "$@"; do echo "  $line" >&2; done
+    echo "" >&2
+    exit 1
+}
+
+staged_all="$(git diff --cached --name-only --diff-filter=ACMR || true)"
+staged_added="$(git diff --cached --name-only --diff-filter=A || true)"
+
+[[ -z "$staged_all" ]] && exit 0
+
+# --- 1. Segredos e material de certificado ---------------------------------
+secrets="$(printf '%s\n' "$staged_all" | grep -iE \
+    '(^|/)(ca\.key|server\.key)$|\.(key|pem|csr|p12|pfx)$|superlink-certificates/|(^|/)state/|(^|/)\.env(\.|$)' || true)"
+if [[ -n "$secrets" ]]; then
+    # shellcheck disable=SC2086
+    fail "segredo ou material de certificado no índice" \
+        $secrets \
+        "Remova do índice: git restore --staged <arquivo>" \
+        "Se já foi commitado, considere o segredo comprometido: ver SECURITY.md"
+fi
+
+# --- 2. Checkpoints e artefatos de execução --------------------------------
+artifacts="$(printf '%s\n' "$staged_all" | grep -iE \
+    '\.(ckpt|pt|pth|fab)$|^output/|^runs/' || true)"
+if [[ -n "$artifacts" ]]; then
+    # shellcheck disable=SC2086
+    fail "checkpoint ou artefato de execução no índice" \
+        $artifacts \
+        "Um checkpoint é derivado de prontuário e não pode ser publicado:" \
+        "isso vale mesmo que os pesos pareçam inócuos (docs/DATA_GOVERNANCE.md)"
+fi
+
+# --- 3. Dados: nada novo entra sob data/ -----------------------------------
+#
+# O MIMIC-IV Demo já versionado é permitido. Qualquer arquivo NOVO sob data/
+# exige alterar este hook, o que força uma decisão deliberada em vez de um
+# `git add -A` distraído. Como o demo e o MIMIC-IV credenciado usam os mesmos
+# nomes de arquivo, o caminho não distingue um do outro: a barreira é a lista
+# de arquivos já versionados, não o nome.
+already_tracked="$(git ls-tree -r --name-only HEAD 2>/dev/null | grep '^data/' || true)"
+bootstrap_allowed='^data/(LICENSE\.txt|README\.txt|SHA256SUMS\.txt|demo_subject_id\.csv|(hosp|icu)/[a-z0-9_]+\.csv)$'
+
+new_data=""
+while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    case "$file" in
+        data/*)
+            # Already versioned: re-staging the demo is fine.
+            if printf '%s\n' "$already_tracked" | grep -qxF "$file"; then
+                continue
+            fi
+            # Only while bootstrapping, i.e. before any data/ file is committed.
+            # Once the demo is in the tree this branch is dead, which is what
+            # closes the hole (a same-named credentialed MIMIC file would
+            # otherwise pass the pattern check).
+            if [[ -z "$already_tracked" ]] && printf '%s' "$file" | grep -qE "$bootstrap_allowed"; then
+                continue
+            fi
+            new_data="${new_data}${file}"$'\n'
+            ;;
+    esac
+done <<< "$staged_added"
+
+if [[ -n "$new_data" ]]; then
+    mapfile -t lines < <(printf '%s' "$new_data" | sed '/^$/d')
+    fail "arquivo de dados novo sob data/" \
+        "${lines[@]}" \
+        "O repositório é público: só o MIMIC-IV Demo (ODbL) pode ser versionado." \
+        "MIMIC-IV credenciado e dados da SESA nunca entram no git." \
+        "Para dados reais, aponte PYHEALTH_EHR_ROOT para fora do repositório." \
+        "Se a inclusão for deliberada e legítima, ajuste .githooks/pre-commit."
+fi
+
+# --- 4. Arquivos grandes ---------------------------------------------------
+big=""
+while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    size="$(git cat-file -s ":$file" 2>/dev/null || echo 0)"
+    if (( size > MAX_BYTES )); then
+        human="$(awk -v b="$size" 'BEGIN{printf "%.1f MB", b/1048576}')"
+        big="${big}${human}  ${file}"$'\n'
+    fi
+done <<< "$staged_all"
+
+if [[ -n "$big" ]]; then
+    mapfile -t lines < <(printf '%s' "$big" | sed '/^$/d')
+    fail "arquivo maior que 50 MB no índice" \
+        "${lines[@]}" \
+        "O GitHub avisa acima de 50 MB e rejeita acima de 100 MB."
+fi
+
+exit 0

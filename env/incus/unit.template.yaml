@@ -1,0 +1,61 @@
+# Incus unit profile template
+#
+# One unit == one institution (or the federation hub). Each unit runs Podman
+# inside, which in turn runs the Flower components described in
+# ../../podman-compose.yml.
+#
+# This is a TEMPLATE. Values marked `TODO(operator):` cannot be guessed by this
+# repository: they depend on the institution's network, storage and CA. They are
+# left explicit rather than defaulted, because a wrong-looking-authoritative
+# default is worse than a visible gap.
+#
+# Apply with:
+#   incus profile create fed-client < unit.template.yaml   # review first
+#
+description: Federated client unit (one institution, nested Podman)
+
+config:
+  # TODO(operator): pin to the image the institution has approved and mirrored
+  # into its own registry. Never pull from a public registry at run time.
+  image: "images:ubuntu/24.04"
+
+  # Container nesting is required: Podman runs inside this unit.
+  security.nesting: "true"
+
+  # Resource ceilings. A client unit trains a small model; it should not be able
+  # to starve the host that also serves clinical workloads.
+  limits.cpu: "4"
+  limits.memory: "8GiB"
+  limits.disk.priority: "5"
+
+  # No privileged containers. The Podman runtime inside the unit runs rootless.
+  security.privileged: "false"
+
+devices:
+  # Isolated NIC: the unit gets exactly one interface and no host network access.
+  eth0:
+    type: nic
+    nictype: bridged
+    # TODO(operator): the isolated federation bridge, NOT the clinical LAN.
+    parent: "TODO_federation_bridge"
+    # TODO(operator): reserve a fixed address so the hub can allow-list it.
+    ipv4.address: "TODO_client_unit_address"
+
+  # Root filesystem with a quota, so a runaway training run cannot fill the host.
+  root:
+    type: disk
+    pool: "TODO_storage_pool"
+    size: "40GiB"
+
+# ---------------------------------------------------------------------------
+# Deliberately absent: host path mounts.
+#
+# The Incus unit is the boundary of the local patient data. Records are read by
+# the container inside the unit and are never mounted out. Declaring no host
+# path mount means a misconfiguration cannot silently expose the hospital
+# filesystem or, worse, a path on a shared network store.
+#
+# If a future version needs the MIMIC-IV demo inside the unit for testing, copy
+# it in through the Incus API and keep it inside the unit's own storage; do not
+# bind-mount a host directory.
+# ---------------------------------------------------------------------------

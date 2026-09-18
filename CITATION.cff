@@ -1,0 +1,66 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "PyHealth Federated Learning"
+abstract: >-
+  Reference framework for federated learning over clinical data, targeting early
+  warning of clinical deterioration. Aggregation strategies (FedAvg, FedProx),
+  non-IID partitioning, differential privacy and explainability are exposed as
+  independent, switchable components.
+version: 0.1.0
+license: Apache-2.0
+type: software
+keywords:
+  - federated learning
+  - healthcare
+  - clinical deterioration
+  - differential privacy
+  - explainability
+  - PyHealth
+  - Flower
+  - PyTorch
+authors:
+  - family-names: "Guetta"
+    given-names: "David"
+    # TODO: add orcid before the first public release.
+repository-code: "https://github.com/daviguetta/flwr-pyhealth"
+references:
+  - type: article
+    title: "Communication-Efficient Learning of Deep Networks from Decentralized Data"
+    authors:
+      - "McMahan, Brendan"
+      - "Moore, Eider"
+      - "Ramage, Daniel"
+      - "Hampson, Seth"
+      - "Arcas, Blaise Aguera y"
+    year: 2017
+    doi: "10.48550/arXiv.1602.05629"
+  - type: article
+    title: "Federated Optimization in Heterogeneous Networks"
+    authors:
+      - "Li, Tian"
+      - "Sahu, Anit Kumar"
+      - "Zaheer, Manzil"
+      - "Sanjabi, Maziar"
+      - "Talwalkar, Ameet"
+      - "Smith, Virginia"
+    year: 2020
+    doi: "10.48550/arXiv.1812.06127"
+  - type: article
+    title: "PyHealth: A Deep Learning Toolkit for Healthcare Applications"
+    authors:
+      - "Yang, Chaoqi"
+      - "Wu, Zhenbang"
+      - "Jiang, Patrick"
+      - "Gao, Zhiyong"
+      - "Yao, Junyi"
+      - "Sun, Jimeng"
+    year: 2023
+    doi: "10.1145/3580305.3599178"
+  - type: dataset
+    title: "MIMIC-IV Clinical Database Demo"
+    authors:
+      - "Johnson, Alistair"
+      - "Bulgar, Tom"
+      - "Pollard, Tom"
+    year: 2023
+    doi: "10.13026/07hj-2a80"

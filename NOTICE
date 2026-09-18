@@ -1,0 +1,46 @@
+PyHealth Federated Learning
+Copyright 2026 David Guetta
+
+This product includes software developed as part of research on federated
+learning for early warning of clinical deterioration.
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+Flower (https://flower.ai/)
+    Licensed under the Apache License, Version 2.0.
+    Used as the federated learning runtime: ServerApp, ClientApp, the
+    aggregation strategies and the differential privacy mechanisms.
+
+PyHealth (https://pyhealth.readthedocs.io/)
+    Licensed under the MIT License.
+    Used for the clinical data pipeline, the task definitions, the model
+    architecture, the training loop and the interpretability suite.
+
+PyTorch (https://pytorch.org/)
+    Licensed under the BSD 3-Clause License.
+
+--------------------------------------------------------------------------------
+Bundled data
+--------------------------------------------------------------------------------
+
+MIMIC-IV Clinical Database Demo
+    PhysioNet. https://doi.org/10.13026/07hj-2a80
+    Licensed under the Open Data Commons Open Database License (ODbL) v1.0.
+    A copy of that licence is provided at data/LICENSE.txt, and the upstream
+    description at data/README.txt.
+
+    This is the openly redistributable 100-patient demonstration subset. It
+    contains de-identified records only. The full MIMIC-IV database is
+    credentialed and MUST NOT be committed to this repository; see
+    docs/DATA_GOVERNANCE.md.
+
+--------------------------------------------------------------------------------
+Data that is NOT included
+--------------------------------------------------------------------------------
+
+SESA-CE clinical data is proprietary and protected under LGPD, HIPAA and GDPR.
+It is never bundled, committed, exported or transmitted by this software. Any
+deployment against SESA-CE data stays entirely within the federated environment
+controlled by that institution.
