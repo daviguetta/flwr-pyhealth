@@ -3,10 +3,13 @@ FROM flwr/superexec:1.34.0
 WORKDIR /app
 
 COPY pyproject.toml ./
-COPY uv.lock ./
 COPY flower_app ./flower_app
+COPY libs ./libs
 
-RUN sed -i '/"flwr>=/d' pyproject.toml \
+# The base image already ships Flower, so its requirement line is stripped before
+# installing. It is matched as "flwr[" too, because the project asks for the
+# simulation and dp extras that the deployment runtime does not need.
+RUN sed -i '/^[[:space:]]*"flwr\[/d' pyproject.toml \
     && python -m pip install --no-cache-dir .
 
 COPY data ./data
