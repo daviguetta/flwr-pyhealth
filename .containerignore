@@ -1,8 +1,32 @@
+# Files excluded from the Podman build context.
+# The build needs pyproject.toml, flower_app/, libs/ and data/ only; everything
+# else here just makes the context larger.
 .git
+.gitignore
 .venv
 __pycache__
-output
-*.pyc
-*.pyo
+*.py[cod]
 *.egg-info
-.conda
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Run artefacts: checkpoints are derived from patient records and must never
+# reach an image layer.
+output/
+runs/
+*.ckpt
+*.pt
+*.pth
+
+# Flower bundles are build output, not source.
+*.fab
+
+# Local tooling and documentation, not needed inside the image.
+.pi/
+AGENTS.md
+.vscode/
+docs/
+scripts/
+tests/
+env/
