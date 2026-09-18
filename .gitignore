@@ -1,13 +1,47 @@
-# Python-generated files
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[oc]
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
 build/
 dist/
 wheels/
-*.egg-info
-.vscode/
-output/
-uv.lock
+*.egg-info/
+*.egg
+.eggs/
 
-# Virtual environments
-.venv
+# Flower run artefacts
+*.fab
+
+# Experiment output: checkpoints, logs and metrics are run-local and must never
+# be committed, because a checkpoint is derived from patient records.
+output/
+runs/
+*.ckpt
+*.pt
+*.pth
+
+# Virtual environments and tooling caches
+.venv/
+venv/
+env/*/superlink-certificates/
+env/*/state/
+.conda/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets: never version TLS private keys or federation credentials.
+*.key
+*.pem
+*.csr
+!env/podman/certs.yml
+
+# Local agent / editor working files
+.pi/
+AGENTS.md
+.vscode/
+.idea/
+
+# uv lock is committed on purpose: it makes the reported results reproducible.
