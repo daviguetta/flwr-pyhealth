@@ -1,0 +1,19 @@
+# Host inventory — SYNTHETIC.
+#
+# Addresses come from 192.0.2.0/24 (RFC 5737, TEST-NET-1) and 10.201.0.0/24,
+# both reserved for documentation. They point at no real infrastructure and must
+# not be used for a deployment. Replace them with real addresses only when a
+# deployment is authorised; never commit clinical-network addresses.
+apiVersion: hpcshelf.org/v1
+kind: HostInventory
+
+hosts:
+  - id: host-hub
+    address: 192.0.2.10
+    vpnAddress: 10.201.0.1
+  - id: host-a
+    address: 192.0.2.11
+    vpnAddress: 10.201.0.2
+  - id: host-b
+    address: 192.0.2.12
+    vpnAddress: 10.201.0.3

@@ -1,0 +1,90 @@
+# Unit image for the PyHealth-FED federation on HPC Shelf.
+#
+# Produces both `flower-hub` and `flower-hospital`, which differ only in the
+# supervisor script they carry (build `SUPERVISOR`) and in their tag.
+#
+# Why the unit images are layered onto the project's Flower application image
+# rather than built `FROM` the platform base:
+#
+#   * the platform base has no Flower, PyHealth or Torch, and it runs Python
+#     3.12 while this project requires >= 3.13;
+#   * the application image already carries all of them, so rebuilding that
+#     stack is avoided.
+#
+# The image ends up with TWO interpreters, and that is a requirement rather than
+# an accident:
+#
+#   /opt/hpcshelf/venv   Python 3.13 + protobuf 7.x  -> the platform's UnitAgent
+#   /python/venv         Python 3.13 + protobuf 6.x  -> the Flower processes
+#
+# The platform's generated *_pb2 modules were produced with protobuf gencode
+# 7.35.1; Flower 1.34 pins a protobuf 6.x runtime. Loading one into the other
+# raises `VersionError`, so they cannot share an interpreter. The UnitAgent's
+# venv is rebuilt here from the platform's own pinned requirements instead of
+# being copied, because a venv is not relocatable across base images.
+#
+# These units are LEAVES: hub and hospital host no nested components, so the
+# UnitAgent never materialises a Podman child and this image ships no Podman
+# binary. See env/hpcshelf/images/README.md.
+#
+# Build:
+#   podman build -f env/hpcshelf/images/Containerfile.flower-unit \
+#     --build-arg SUPERVISOR=supervise-hub.sh \
+#     -t localhost/flower-hub:0.1.0 env/hpcshelf/images
+#
+# Or use scripts/build_hpcshelf_images.sh, which builds both.
+
+ARG UNIT_BASE=localhost/podman-unit-base:local
+ARG APP_IMAGE=localhost/pyhealth-flower-superexec:0.1.0
+ARG SUPERVISOR=supervise-hub.sh
+
+# Stage 0: the platform's unit base, used only as a source of bootstrap files
+# and of its pinned UnitAgent requirements. Nothing is inherited from it.
+FROM ${UNIT_BASE} AS bootstrap
+
+# Stage 1: the runnable unit image.
+FROM ${APP_IMAGE}
+
+# The application image runs as an unprivileged `app` user, while the platform's
+# unit model expects a unit that owns /opt/hpcshelf, /etc/hpcshelf and
+# /var/lib/hpcshelf and starts its own UnitAgent. Root is what the platform base
+# uses. See the hardening note in the images README.
+USER root
+
+RUN mkdir -p /opt/hpcshelf /etc/hpcshelf /var/lib/hpcshelf/children
+
+# Platform bootstrap code, file by file. Its venv is deliberately not copied:
+# it is not relocatable, and its protobuf version could not be reused anyway.
+COPY --from=bootstrap /opt/hpcshelf/unitagent /opt/hpcshelf/unitagent
+COPY --from=bootstrap /opt/hpcshelf/common_pb2.py /opt/hpcshelf/
+COPY --from=bootstrap /opt/hpcshelf/unitagent_pb2.py /opt/hpcshelf/
+COPY --from=bootstrap /opt/hpcshelf/unitagent_pb2_grpc.py /opt/hpcshelf/
+COPY --from=bootstrap /opt/hpcshelf/entrypoint.sh /opt/hpcshelf/
+COPY --from=bootstrap /opt/hpcshelf/nested-podman-runtime.sh /opt/hpcshelf/
+
+# The UnitAgent's own interpreter, built from this image's Python and the
+# platform's pinned requirements (grpcio, protobuf 7.x, httpx, pydantic).
+# Keeping it separate is what lets protobuf 7.x coexist with Flower's 6.x.
+COPY --from=bootstrap /tmp/requirements.txt /tmp/unitagent-requirements.txt
+RUN /python/venv/bin/python -m venv /opt/hpcshelf/venv \
+    && /opt/hpcshelf/venv/bin/pip install --no-cache-dir --disable-pip-version-check \
+         -r /tmp/unitagent-requirements.txt \
+    && rm -f /tmp/unitagent-requirements.txt
+
+# The application command the platform runs for this unit.
+ARG SUPERVISOR
+COPY ${SUPERVISOR} /opt/hpcshelf/
+RUN chmod +x "/opt/hpcshelf/${SUPERVISOR}" /opt/hpcshelf/entrypoint.sh
+
+# A leaf unit hosts no Podman children: there is no nested runtime to enable and
+# no Podman socket to reach. The platform defaults to the mock runtime when this
+# is unset; stating it keeps the intent visible in the image itself.
+ENV HPCSHELF_NESTED_RUNTIME_ENABLED=false \
+    HPCSHELF_PODMAN_RUNTIME=mock
+
+# The platform launches the application command with this working directory.
+WORKDIR /application
+
+# PID 1 stays the platform's entrypoint: it starts the UnitAgent, which in turn
+# launches the supervisor named in the unit plan.
+CMD ["/opt/hpcshelf/entrypoint.sh"]

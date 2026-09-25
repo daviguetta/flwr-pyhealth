@@ -1,0 +1,27 @@
+# Federation application: 1 hub + 2 hospitals, one physical host each.
+#
+# `placement` may reference root units only (D004 / NON_ROOT_UNIT_PLACEMENT),
+# which is why only `institution` appears here. Hosts are synthetic.
+apiVersion: hpcshelf.org/v1
+kind: Application
+
+metadata:
+  name: pyhealth-federation
+
+spec:
+  component:
+    ref: "federation-root:0.1"
+
+  units:
+    institution:
+      replicas: 3
+
+  placement:
+    institution:
+      instances:
+        - replica: 0
+          host: host-hub
+        - replica: 1
+          host: host-a
+        - replica: 2
+          host: host-b

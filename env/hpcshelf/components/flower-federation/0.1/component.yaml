@@ -1,0 +1,72 @@
+# Leaf component of the PyHealth-FED federation: the Podman units.
+#
+# DESIGN DECISION (gap #2, docs/HPC_SHELF_INTEGRATION.md section 4):
+# one unit per INSTITUTION, not per Flower process. `hub` runs SuperLink +
+# SuperExec ServerApp; each `hospital` runs SuperNode + SuperExec ClientApp,
+# grouped by a supervisor script, because HPC Shelf accepts a single
+# `application.command` per unit.
+#
+# Why not four units: HPC Shelf resolves a horizontal dependency only inside the
+# same `component_path` (deployment_planner._resolve_dependencies), and forbids
+# two inner replicas on the same host replica within one composition (C017).
+# Splitting into separate components would allow co-location but break
+# `hospital -> hub`. Grouping per institution satisfies both rules without
+# touching the platform.
+#
+# Network boundary: only `fleet` (9092) is published. The SuperLink AppIO (9091)
+# and the SuperNode AppIO (9094) are loopback inside their own container.
+apiVersion: hpcshelf.org/v1
+kind: Component
+
+metadata:
+  name: flower-federation
+  version: "0.1"
+
+spec:
+  units:
+    hub:
+      image: catalog.hpcshelf.org/pyhealth/flower-hub:0.1.0
+
+      replicas:
+        min: 1
+        max: 1
+        default: 1
+
+      application:
+        command:
+          - /opt/hpcshelf/supervise-hub.sh
+        environment:
+          FLWR_NUM_ROUNDS: "3"
+          PYHEALTH_STRATEGY: "fedavg"
+          PYHEALTH_DP_MODE: "none"
+          PYHEALTH_PROXIMAL_MU: "0.0"
+
+      services:
+        fleet:
+          protocol: grpc
+          containerPort: 9092
+
+    hospital:
+      image: catalog.hpcshelf.org/pyhealth/flower-hospital:0.1.0
+
+      replicas:
+        min: 1
+        max: 8
+        default: 2
+
+      application:
+        command:
+          - /opt/hpcshelf/supervise-hospital.sh
+        environment:
+          PYHEALTH_PARTITION_SCHEME: "uniform"
+
+      # R4: the planner injects SUPERLINK_HOST = hub VPN address and
+      # SUPERLINK_PORT = published port of the `fleet` service.
+      dependencies:
+        hub:
+          target:
+            unit: hub
+            service: fleet
+          environment:
+            host: SUPERLINK_HOST
+            port: SUPERLINK_PORT

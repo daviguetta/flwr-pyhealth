@@ -1,0 +1,61 @@
+# Root component of the PyHealth-FED federation on HPC Shelf.
+#
+# One Incus unit `institution` per participating host. Each unit is one
+# institution's data boundary: records are read inside it and never mounted out.
+#
+# The `federation` nested composition plants the Podman units of the
+# `flower-federation` component onto the `institution` host replicas. Every inner
+# replica occupies a distinct host replica, which satisfies the HPC Shelf
+# occupancy invariant (C017 / HOST_REPLICA_OVERLAP_COLLISION).
+#
+# See docs/HPC_SHELF_INTEGRATION.md (sections 3.1 and 4).
+apiVersion: hpcshelf.org/v1
+kind: Component
+
+metadata:
+  name: federation-root
+  version: "0.1"
+
+spec:
+  units:
+    institution:
+      image: hpcshelf-unit-base
+      replicas:
+        min: 1
+        max: 8
+        default: 3
+
+  nestedComponents:
+    federation:
+      component:
+        ref: "flower-federation:0.1"
+
+      # Concrete cardinalities selected by this composition.
+      units:
+        hub:
+          replicas: 1
+        hospital:
+          replicas: 2
+
+      # Resulting occupancy (collision-free):
+      #   institution[0] <- hub[0]        (the federation hub)
+      #   institution[1] <- hospital[0]   (hospital A)
+      #   institution[2] <- hospital[1]   (hospital B)
+      overlap:
+        hub:
+          hostUnit: institution
+          mapping:
+            type: explicit
+            instances:
+              - innerReplica: 0
+                hostReplica: 0
+
+        hospital:
+          hostUnit: institution
+          mapping:
+            type: explicit
+            instances:
+              - innerReplica: 0
+                hostReplica: 1
+              - innerReplica: 1
+                hostReplica: 2
