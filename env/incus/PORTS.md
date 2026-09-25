@@ -14,6 +14,11 @@ services are exposed, and to whom".
 | `9094` | SuperNode | AppIO runtime API for the client's SuperExec | **No** |
 | `9095` | SuperNode | AppIO runtime API for the second client's SuperExec | **No** |
 
+Every SuperNode listens for AppIO on `9094` by default. The second and later
+SuperNodes therefore need an explicit `--clientappio-api-address`; otherwise they
+listen on `9094` while their SuperExec dials `9095`, and the round never closes.
+See the port invariant in `docs/DEPLOYMENT.md`.
+
 ## The data path across units
 
 Only one flow ever leaves a client unit:

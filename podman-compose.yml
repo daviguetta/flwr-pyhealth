@@ -21,11 +21,17 @@ services:
 
   supernode-1:
     image: flwr/supernode:1.34.0
-    # partiton-id/num-partitions are delivered here, which is why the ClientApp
+    # partition-id/num-partitions are delivered here, which is why the ClientApp
     # reads them from node_config and refuses to guess when they are absent.
+    #
+    # --clientappio-api-address is stated explicitly even though 9094 happens to
+    # be the SuperNode default: the paired superexec-clientapp-1 dials
+    # supernode-1:9094, and a SuperNode whose AppIO port drifts from its peer's
+    # target deadlocks the round (see supernode-2 below).
     command: >-
       --superlink superlink:9092
       --insecure
+      --clientappio-api-address 0.0.0.0:9094
       --node-config "partition-id=0 num-partitions=2"
       --isolation process
     ports:
@@ -37,9 +43,15 @@ services:
 
   supernode-2:
     image: flwr/supernode:1.34.0
+    # 9095 is NOT the SuperNode default (that is 9094), so this override is
+    # mandatory rather than cosmetic. Without it the SuperNode listens on 9094
+    # while superexec-clientapp-2 keeps dialing supernode-2:9095; the SuperExec
+    # retries forever and the ServerApp waits on a reply that never arrives,
+    # which presents as aggregation stalled on round 1 with no fatal error.
     command: >-
       --superlink superlink:9092
       --insecure
+      --clientappio-api-address 0.0.0.0:9095
       --node-config "partition-id=1 num-partitions=2"
       --isolation process
     ports:
