@@ -1,0 +1,269 @@
+diff --git a/podman-unit-base/unitagent/application_manager.py b/podman-unit-base/unitagent/application_manager.py
+index 85a24cb..e816f35 100644
+--- a/podman-unit-base/unitagent/application_manager.py
++++ b/podman-unit-base/unitagent/application_manager.py
+@@ -9,6 +9,57 @@ import time
+ import common_pb2
+ 
+ 
++# ============================================================
++# Platform-owned unit identity
++# ============================================================
++
++#: Variables the platform injects into every application process.
++#:
++#: A component descriptor's environment binding carries one value shared by
++#: every replica, so it cannot express a per-replica value. These variables are
++#: therefore supplied by the platform, from the plan it already resolved.
++UNIT_IDENTITY_VARIABLES = (
++    "UNIT_ID",
++    "UNIT_NAME",
++    "UNIT_REPLICA_ID",
++)
++
++
++def unit_identity_environment(unit_plan) -> dict[str, str]:
++    """Build the identity bindings for one unit's application process.
++
++    ``UNIT_REPLICA_ID`` is the resolved 0-based replica index. It is the only
++    stable way for a replica to learn which shard of the workload it owns: a
++    replica that guesses can silently duplicate another replica's work while
++    the run still reports success.
++
++    A descriptor that defines one of these names is rejected rather than
++    silently overridden, because two replicas claiming the same identity is
++    exactly the failure this exists to prevent.
++    """
++
++    conflicts = sorted(
++        binding.name
++        for binding in unit_plan.environment
++        if binding.name in UNIT_IDENTITY_VARIABLES
++    )
++
++    if conflicts:
++        raise ValueError(
++            "Component descriptor defines platform-owned unit identity "
++            f"variable(s): {', '.join(conflicts)}. The platform supplies "
++            f"{', '.join(UNIT_IDENTITY_VARIABLES)} for every unit from the "
++            "resolved plan, because a descriptor binding is shared by all "
++            "replicas and cannot carry a per-replica value."
++        )
++
++    return {
++        "UNIT_ID": unit_plan.id,
++        "UNIT_NAME": unit_plan.unit_name,
++        "UNIT_REPLICA_ID": str(unit_plan.replica),
++    }
++
++
+ class SubprocessApplicationManager:
+     """
+     Starts and supervises the application process associated
+diff --git a/podman-unit-base/unitagent/server.py b/podman-unit-base/unitagent/server.py
+index e2f8723..ec0bf54 100644
+--- a/podman-unit-base/unitagent/server.py
++++ b/podman-unit-base/unitagent/server.py
+@@ -14,6 +14,7 @@ import unitagent_pb2_grpc
+ 
+ from unitagent.application_manager import (
+     SubprocessApplicationManager,
++    unit_identity_environment,
+ )
+ 
+ 
+@@ -173,6 +174,13 @@ def serve():
+         for binding in unit_plan.environment
+     }
+ 
++    # Identity the platform owns, taken from the plan it already resolved. Raised
++    # here, before any process starts, if a descriptor tried to define one of
++    # these names.
++    application_environment.update(
++        unit_identity_environment(unit_plan)
++    )
++
+     application_command = None
+ 
+     if unit_plan.HasField(
+diff --git a/tests/test_application_manager.py b/tests/test_application_manager.py
+index f47933d..f017421 100644
+--- a/tests/test_application_manager.py
++++ b/tests/test_application_manager.py
+@@ -1,12 +1,88 @@
+ import sys
+ 
+ import common_pb2
++import pytest
+ 
+ from unitagent.application_manager import (
++    UNIT_IDENTITY_VARIABLES,
+     SubprocessApplicationManager,
++    unit_identity_environment,
+ )
+ 
+ 
++def make_unit_plan(bindings=()):
++    plan = common_pb2.UnitPlan(
++        id="app-unitagent-test/root/federation/hospital[1]",
++        component_path="root/federation",
++        component_ref="flower-federation:0.1",
++        unit_name="hospital",
++        replica=1,
++        host_id="host-a",
++    )
++
++    for name, value in bindings:
++        plan.environment.add(
++            name=name,
++            value=value,
++        )
++
++    return plan
++
++
++def test_unit_identity_environment_exposes_the_replica_index():
++    """A unit must be able to learn which replica it is, from the plan alone.
++
++    Without this, a workload has no per-replica value to read: an environment
++    binding carries one value shared by every replica, so the index cannot come
++    from the component descriptor.
++    """
++
++    environment = unit_identity_environment(
++        make_unit_plan()
++    )
++
++    assert environment["UNIT_REPLICA_ID"] == "1"
++    assert environment["UNIT_NAME"] == "hospital"
++    assert (
++        environment["UNIT_ID"]
++        == "app-unitagent-test/root/federation/hospital[1]"
++    )
++
++
++def test_unit_identity_variables_are_reported_as_platform_owned():
++    assert unit_identity_environment(
++        make_unit_plan()
++    ).keys() == set(UNIT_IDENTITY_VARIABLES)
++
++
++def test_descriptor_may_not_define_a_unit_identity_variable():
++    """A descriptor binding could otherwise make two replicas share an identity.
++
++    Overriding silently would be worse than failing: the workload would read the
++    descriptor's value and every replica would claim the same shard.
++    """
++
++    plan = make_unit_plan(
++        bindings=[("UNIT_REPLICA_ID", "0")]
++    )
++
++    with pytest.raises(ValueError) as error:
++        unit_identity_environment(plan)
++
++    assert "UNIT_REPLICA_ID" in str(error.value)
++
++
++def test_descriptor_bindings_are_kept_alongside_the_identity():
++    plan = make_unit_plan(
++        bindings=[("SUPERLINK_HOST", "10.201.0.1")]
++    )
++
++    environment = unit_identity_environment(plan)
++
++    assert environment["UNIT_REPLICA_ID"] == "1"
++    assert "SUPERLINK_HOST" not in environment
++
++
+ def test_application_start_and_stop():
+ 
+     manager = SubprocessApplicationManager(
+diff --git a/unitagent/application_manager.py b/unitagent/application_manager.py
+index 85a24cb..e816f35 100644
+--- a/unitagent/application_manager.py
++++ b/unitagent/application_manager.py
+@@ -9,6 +9,57 @@ import time
+ import common_pb2
+ 
+ 
++# ============================================================
++# Platform-owned unit identity
++# ============================================================
++
++#: Variables the platform injects into every application process.
++#:
++#: A component descriptor's environment binding carries one value shared by
++#: every replica, so it cannot express a per-replica value. These variables are
++#: therefore supplied by the platform, from the plan it already resolved.
++UNIT_IDENTITY_VARIABLES = (
++    "UNIT_ID",
++    "UNIT_NAME",
++    "UNIT_REPLICA_ID",
++)
++
++
++def unit_identity_environment(unit_plan) -> dict[str, str]:
++    """Build the identity bindings for one unit's application process.
++
++    ``UNIT_REPLICA_ID`` is the resolved 0-based replica index. It is the only
++    stable way for a replica to learn which shard of the workload it owns: a
++    replica that guesses can silently duplicate another replica's work while
++    the run still reports success.
++
++    A descriptor that defines one of these names is rejected rather than
++    silently overridden, because two replicas claiming the same identity is
++    exactly the failure this exists to prevent.
++    """
++
++    conflicts = sorted(
++        binding.name
++        for binding in unit_plan.environment
++        if binding.name in UNIT_IDENTITY_VARIABLES
++    )
++
++    if conflicts:
++        raise ValueError(
++            "Component descriptor defines platform-owned unit identity "
++            f"variable(s): {', '.join(conflicts)}. The platform supplies "
++            f"{', '.join(UNIT_IDENTITY_VARIABLES)} for every unit from the "
++            "resolved plan, because a descriptor binding is shared by all "
++            "replicas and cannot carry a per-replica value."
++        )
++
++    return {
++        "UNIT_ID": unit_plan.id,
++        "UNIT_NAME": unit_plan.unit_name,
++        "UNIT_REPLICA_ID": str(unit_plan.replica),
++    }
++
++
+ class SubprocessApplicationManager:
+     """
+     Starts and supervises the application process associated
+diff --git a/unitagent/server.py b/unitagent/server.py
+index e2f8723..ec0bf54 100644
+--- a/unitagent/server.py
++++ b/unitagent/server.py
+@@ -14,6 +14,7 @@ import unitagent_pb2_grpc
+ 
+ from unitagent.application_manager import (
+     SubprocessApplicationManager,
++    unit_identity_environment,
+ )
+ 
+ 
+@@ -173,6 +174,13 @@ def serve():
+         for binding in unit_plan.environment
+     }
+ 
++    # Identity the platform owns, taken from the plan it already resolved. Raised
++    # here, before any process starts, if a descriptor tried to define one of
++    # these names.
++    application_environment.update(
++        unit_identity_environment(unit_plan)
++    )
++
+     application_command = None
+ 
+     if unit_plan.HasField(
