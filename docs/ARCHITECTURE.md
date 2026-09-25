@@ -59,6 +59,89 @@ graph TB
 O inventário completo de portas e quais podem ser expostas está em
 `env/incus/PORTS.md`.
 
+### 2.1 Modelo lógico: componentes, unidades e interfaces
+
+A topologia acima descreve **processos**. O modelo abaixo descreve **unidades e
+interfaces** — a mesma federação vista pelo que cada peça oferece e exige. Ele
+está versionado em `libs/federation_components/`, e é contra ele que qualquer
+descritor de implantação é verificado:
+
+```bash
+python -m libs.federation_components
+```
+
+**Dois componentes.** `comunicação` carrega o que é de longa duração e só
+roteia; `exec` carrega o que executa código, e é o único que lê prontuário.
+
+| Componente | Unidade | Processo | Provê | Requer |
+| --- | --- | --- | --- | --- |
+| comunicação | `link` | `flower-superlink` | `appio`, `fleet`, `control` | — |
+| comunicação | `node` | `flower-supernode` | `appio` | `fleet` |
+| exec | `exec-server` | `flower-superexec --plugin-type serverapp` | — | `appio` |
+| exec | `exec-client` | `flower-superexec --plugin-type clientapp` | — | `appio` |
+
+**Três ligações, uma delas cruza a fronteira.**
+
+| Ligação | Porta | Escopo |
+| --- | ---: | --- |
+| `exec-server → link` | 9091 | intra-unidade |
+| `exec-client → node` | 9094 | intra-unidade |
+| `node → link` | 9092 | **inter-unidade** |
+
+```mermaid
+graph TB
+    subgraph SRV["unidade server"]
+        LINK["link<br/>(SuperLink)<br/>provê appio · fleet · control"]
+        ES["exec-server<br/>(SuperExec → ServerApp)<br/>requer appio"]
+    end
+    subgraph C1["unidade client 1"]
+        NODE1["node<br/>(SuperNode)<br/>provê appio · requer fleet"]
+        EC1["exec-client<br/>(SuperExec → ClientApp)<br/>requer appio"]
+    end
+    subgraph C2["unidade client 2"]
+        NODE2["node<br/>(SuperNode)<br/>provê appio · requer fleet"]
+        EC2["exec-client<br/>(SuperExec → ClientApp)<br/>requer appio"]
+    end
+
+    ES -.->|"appio 9091 (intra)"| LINK
+    EC1 -.->|"appio 9094 (intra)"| NODE1
+    EC2 -.->|"appio 9094 (intra)"| NODE2
+    NODE1 ==>|"fleet 9092 (inter-unidade)"| LINK
+    NODE2 ==>|"fleet 9092 (inter-unidade)"| LINK
+```
+
+**Invariante, e em que nível.** `appio` nunca cruza fronteira de unidade física —
+de contêiner: um SuperExec fala com o SuperLink ou o SuperNode ao seu lado, e só
+`fleet` cruza. `env/incus/PORTS.md` enuncia a mesma regra no nível da instituição
+(a unidade Incus), que é mais fraco. A escolha pelo nível do contêiner é
+deliberada (decisão de 2026-09-25, `HPC_SHELF_ROADMAP.md` Fase 3): separar as
+quatro unidades em contêineres distintos manteria `appio` dentro da instituição,
+mas o tiraria do loopback e o poria na rede. Optou-se por manter o agrupamento e o
+loopback — de modo que o agrupamento é **propriedade defendida**, não concessão à
+plataforma. O código `M103` acusa qualquer realização que separe um SuperExec do
+seu provedor de AppIO.
+
+**Lógico × físico.** O modelo acima é lógico. A realização física agrupa
+`link`+`exec-server` numa unidade e `node`+`exec-client` noutra — `hub`/`hospital`
+neste repositório, `aggregator`/`client` no catálogo da plataforma — porque na HPC
+Shelf a dependência horizontal só resolve dentro do mesmo componente e cada
+réplica de host comporta uma única réplica interna. O agrupamento é uma
+**realização**, não o modelo: as duas grafias reduzem ao mesmo modelo, e é isso
+que `libs/federation_components` verifica. Separar em quatro unidades é a opção B
+de `HPC_SHELF_INTEGRATION.md` seção 4, ainda condicionada a uma evolução da
+plataforma — e agora justificável com um modelo formal em vez de um argumento.
+
+**Fronteira de dados.** A única unidade que lê prontuário é `exec-client`; o
+`node` ao lado é um carteiro cego. O modelo registra isso (`touches_data`) e o
+verificador exige que essa unidade esteja dentro de uma fronteira de dados
+(código `M105`).
+
+**Ressalva.** O lado servidor do rascunho atual chama `load_samples()` em
+`flower_app/server_app.py` para fixar vocabulário e formato de embedding, o que
+na prática lê o dataset demo no servidor. A intenção registrada é derivar apenas
+o *schema*; a implementação ainda não separa as duas coisas. Fica para a Fase 7
+(governança), com a fronteira de dados.
+
 ## 3. Um round federado
 
 ```mermaid
