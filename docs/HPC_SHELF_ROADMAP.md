@@ -378,8 +378,40 @@ teste prova que ele recusa.
 - [ ] `RunManifest` de `libs/federation_contracts` emitido (exigido pela
       política de commits para qualquer resultado reportado).
 
-**Bloqueio.** Fase 5 + publicação no catálogo (requer autorização e credenciais
-do orientador — pendência já registrada em `HPC_SHELF_ORIENTADOR_REQUEST.md`).
+**Bloqueio — reanalisado em 2026-09-25.** O bloqueio **não é o catálogo**. Verificado
+localmente, com o servidor de catálogo da própria plataforma:
+
+| Passo | Precisa de | Resultado |
+| --- | --- | --- |
+| catálogo local (`catalog_server.py --catalog-root`) | a árvore de ensaio | ✅ serve `/api/v1/components/{ref}/versions/{v}` com ETag |
+| `validate` | só o catálogo | ✅ `{"errors": [], "valid": true}` |
+| `plan` | catálogo + aplicação + inventário | ✅ 6 unidades, `SUPERLINK_HOST`/`PORT` injetados |
+| `preflight` | + material mTLS | ❌ `input_invalid` / `local_input` |
+
+`validate` e `plan` rodam **100% locais**: sem Incus, sem artefato do
+orientador, sem autorização. O `preflight` falha em **validação de entrada
+local**, antes de tocar a rede — então a fiação mTLS é verificável assim que
+houver material, sem depender da rede dele.
+
+O que falta, exatamente:
+
+1. **Material mTLS** (CA + chave e certificado de cliente), gerado no
+   provisionamento do host;
+2. **Incus + HostAgent** — `incus` está ausente nesta máquina; há `/dev/kvm` e
+   `snap`, então é instalável;
+3. **Os bytes da imagem base do root** — 501 MB, publicados apenas em
+   `catalog.hpcshelf.org`, que **responde timeout** daqui. É o único insumo que
+   só o orientador tem.
+
+Os três são trabalho local ou um pedido de **um arquivo**. Nenhum é autorização
+de escrita no catálogo dele — que só faz falta para tornar o resultado
+*autoritativo* no catálogo dele, não para validar o trabalho.
+
+**Fricção registrada.** O `plan` da CLI precisa de `--vpn-base-network
+10.201.0.0/16 --vpn-prefix-length 24` para casar com o `hosts.yaml`, porque o
+default do planner (`10.200.0.0/24`) não contém os endereços pré-alocados. O
+`validate.py` já sabe disso; um usuário da CLI não. Cabe nota em
+`env/hpcshelf/README.md`.
 
 ---
 
@@ -417,6 +449,7 @@ Itens já registrados como lacunas #3, #4 e #6 na integração.
 
 | Data | Fase | Evidência | Resultado |
 | --- | --- | --- | --- |
+| 2026-09-25 | 6 | `catalog_server.py` local + `hpcshelf_client.py validate/plan` contra `--catalog-url http://127.0.0.1:18080` | **validate ✅ e plan ✅ offline**; `preflight` ❌ em `input_invalid` (falta mTLS) |
 | 2026-09-25 | 5 | `tests/test_fedavg_identity.py` | **8 passed** — identidade FedAvg ≡ SGD centralizado, gap `3e-8`; 4 controles negativos + meta-controle |
 | 2026-09-25 | 4 | `scripts/smoke_hpcshelf_images.sh` com os 6 checks de invariante de imagem | **16 passed, 0 failed** (10 antes) |
 | 2026-09-25 | 3 | decisão: variante 2 não perseguida; invariante fixado no nível contêiner | agrupamento passa a propriedade defendida |
