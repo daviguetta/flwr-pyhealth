@@ -44,4 +44,5 @@ AGENTS.md
 .vscode/
 .idea/
 
+eng/
 # uv lock is committed on purpose: it makes the reported results reproducible.
