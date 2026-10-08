@@ -3,7 +3,7 @@
 The federation topology expressed as HPC Shelf component/application descriptors,
 plus the proofs that the platform's own validator and planner accept them. The
 design and its rationale live in
-[`docs/HPC_SHELF_INTEGRATION.md`](../../docs/HPC_SHELF_INTEGRATION.md).
+[`docs/HPC_SHELF_DECISIONS.md`](../../docs/HPC_SHELF_DECISIONS.md).
 
 There is **one logical model and two physical realizations**. Both arms describe
 the same federation (1 hub + 2 hospitals, `fleet` 9092 crossing the institution
@@ -33,7 +33,7 @@ VPN because the platform has no `scope: parent` publication. Read each arm's
 * `patches/` — the `0001-unit-identity-environment.patch` was **withdrawn**
   (2026-09-25): the platform already injects `HPCSHELF_UNIT_PLAN` for every unit,
   root and nested, so the patch's premise was wrong. Removed from the tree;
-  provenance is in git history and in `docs/HPC_SHELF_ROADMAP.md` (Fase 2).
+  provenance is in git history and in `docs/HPC_SHELF_DECISIONS.md` (Fase 2).
 
 ## Running the proofs
 

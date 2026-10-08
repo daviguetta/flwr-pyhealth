@@ -2,7 +2,7 @@
 #
 # Application command for the federation HUB unit.
 #
-# Per the gap #2 decision (docs/HPC_SHELF_INTEGRATION.md, section 4): HPC Shelf
+# Per the gap #2 decision (docs/HPC_SHELF_DECISIONS.md, section 5): HPC Shelf
 # accepts one application command per unit, and a horizontal dependency only
 # resolves inside one component, so the hub's two Flower processes share this
 # container and are supervised here.

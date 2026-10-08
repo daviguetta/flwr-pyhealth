@@ -11,7 +11,7 @@
 # parent's `UnitPlan.children`, which is the only way a parent unit can learn the
 # address of the child it hosts (see `../images/supervise-exec.sh`). The platform
 # has no parent-scoped publication, so declaring it also publishes it on the
-# application VPN. `docs/HPC_SHELF_ROADMAP.md`, Phase 3 (reopened 2026-10-03),
+# application VPN. `docs/HPC_SHELF_DECISIONS.md`, section 5,
 # records the reasoning; `../validate.py` reproduces the measurement offline and
 # reports it next to the grouped arm, which pays nothing.
 #

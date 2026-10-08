@@ -1,6 +1,6 @@
 # Leaf component of the PyHealth-FED federation: the Podman units.
 #
-# DESIGN DECISION (gap #2, docs/HPC_SHELF_INTEGRATION.md section 4):
+# DESIGN DECISION (gap #2, docs/HPC_SHELF_DECISIONS.md section 5):
 # one unit per INSTITUTION, not per Flower process. `hub` runs SuperLink +
 # SuperExec ServerApp; each `hospital` runs SuperNode + SuperExec ClientApp,
 # grouped by a supervisor script, because HPC Shelf accepts a single

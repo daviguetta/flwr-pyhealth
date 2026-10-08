@@ -235,10 +235,10 @@ entregar o patch testado se o senhor concordar com o conceito.
 
 ## Referências neste repositório
 
-* [`docs/HPC_SHELF_INTEGRATION.md`](HPC_SHELF_INTEGRATION.md) — desenho, decisões,
-  resultados das fases e o que ficou em aberto.
+* [`docs/HPC_SHELF_DECISIONS.md`](HPC_SHELF_DECISIONS.md) — limitações, decisões e fases.
+* [`docs/HPC_SHELF_RESULTS.md`](HPC_SHELF_RESULTS.md) — resultados das fases.
 * ~~`env/hpcshelf/patches/`~~ — removido na reorganização de `env/`; o patch
   retirado (`0001-unit-identity-environment.patch`) e sua justificativa ficam no
-  histórico git (`docs/HPC_SHELF_ROADMAP.md`, Fase 2).
+  histórico git (`docs/HPC_SHELF_DECISIONS.md`, Fase 2).
 * [`env/hpcshelf/arms/grouped/images/README.md`](../env/hpcshelf/arms/grouped/images/README.md) — como as
   imagens são construídas e o que a publicação exige.

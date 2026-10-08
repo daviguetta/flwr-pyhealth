@@ -98,7 +98,7 @@ echo "==> image invariants"
 # against protobuf 7.x while Flower 1.34 pins a 6.x runtime; loading one in the
 # other raises VersionError. Both are needed, so neither may drift.
 #
-# These were prose in docs/HPC_SHELF_INTEGRATION.md section 5. Asserting them
+# These were prose in docs/HPC_SHELF_DECISIONS.md section 7. Asserting them
 # means a base-image change that breaks one is a red check, not a surprise
 # discovered during a deployment.
 invariants="$(podman run --rm --entrypoint sh "$HOSPITAL_IMAGE" -c '

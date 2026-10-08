@@ -114,7 +114,7 @@ graph TB
 de contêiner: um SuperExec fala com o SuperLink ou o SuperNode ao seu lado, e só
 `fleet` cruza. `env/incus/PORTS.md` enuncia a mesma regra no nível da instituição
 (a unidade Incus), que é mais fraco. A escolha pelo nível do contêiner é
-deliberada (decisão de 2026-09-25, `HPC_SHELF_ROADMAP.md` Fase 3): separar as
+deliberada (decisão de 2026-09-25, `HPC_SHELF_DECISIONS.md` Fase 3): separar as
 quatro unidades em contêineres distintos manteria `appio` dentro da instituição,
 mas o tiraria do loopback e o poria na rede. Optou-se por manter o agrupamento e o
 loopback — de modo que o agrupamento é **propriedade defendida**, não concessão à
@@ -128,7 +128,7 @@ Shelf a dependência horizontal só resolve dentro do mesmo componente e cada
 réplica de host comporta uma única réplica interna. O agrupamento é uma
 **realização**, não o modelo: as duas grafias reduzem ao mesmo modelo, e é isso
 que `libs/federation_components` verifica. Separar em quatro unidades é a opção B
-de `HPC_SHELF_INTEGRATION.md` seção 4 — agora **construída e medida**, não só
+de `HPC_SHELF_DECISIONS.md` seção 5 — agora **construída e medida**, não só
 argumentada (abaixo); o que falta na plataforma é `scope: parent`, que a tornaria
 segura, não possível.
 

@@ -5,7 +5,7 @@ instead of two. Four units — `exec-server`, `exec-client`, `link`, `node` — 
 its own container, instead of the grouped `hub` / `hospital` pair.
 
 This directory exists because the grouped arm's own reasoning is falsifiable, and
-`docs/HPC_SHELF_ROADMAP.md` (Phase 3, reopened 2026-10-03) says so: what the
+`docs/HPC_SHELF_DECISIONS.md` (section 5) says so: what the
 invariant protects is not "`appio` must not cross a container boundary", it is
 "`appio` must not be reachable beyond its immediate parent". In the grouped arm
 the second follows from the first; here it does not, and this arm is what measures

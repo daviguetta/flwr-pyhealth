@@ -25,7 +25,7 @@ agree for every realization listed here, because a bundled deployment keeps
 ``appio`` on loopback inside a single container. Separating the units would
 satisfy the institution reading while breaking this one, and that is the trade the
 project declined on 2026-09-25: process isolation was not judged worth putting the
-runtime API on a network. See ``docs/HPC_SHELF_ROADMAP.md`` Phase 3.
+runtime API on a network. See ``docs/HPC_SHELF_DECISIONS.md`` Fase 3.
 
 Governance note: this describes *shape*. It carries no patient data.
 """
@@ -207,7 +207,7 @@ class Realization:
 #: This repository's descriptors. `hub` bundles the server-side pair and
 #: `hospital` the client-side pair, because HPC Shelf resolves a horizontal
 #: dependency only inside one component and admits one inner replica per host
-#: replica. See docs/HPC_SHELF_INTEGRATION.md section 4.
+#: replica. See docs/HPC_SHELF_DECISIONS.md section 5.
 REALIZATION_PROJECT = Realization(
     artifact="env/hpcshelf/arms/grouped (project descriptors)",
     descriptors="env/hpcshelf/arms/grouped/components/flower-federation/0.1/component.yaml",

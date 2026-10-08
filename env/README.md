@@ -25,7 +25,7 @@ Flower components. See `docs/ARCHITECTURE.md` for the full topology.
   template rather than a working deployment.
 * **Checking the topology against the HPC Shelf platform** → `hpcshelf/`, which
   runs the platform's SemanticValidator and DeploymentPlanner over the
-  descriptors with no infrastructure. See `docs/HPC_SHELF_INTEGRATION.md`.
+  descriptors with no infrastructure. See `docs/HPC_SHELF_DECISIONS.md`.
 
 ## Security note
 

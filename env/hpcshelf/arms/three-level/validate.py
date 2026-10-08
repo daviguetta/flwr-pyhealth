@@ -568,7 +568,7 @@ def main() -> int:
         "\n  surface of `appio` from a loopback inside one container to the whole"
         "\n  application VPN. `scope: parent` on a service (absent from"
         "\n  `ServiceDefinition` today) is the missing capability that would make the"
-        "\n  split free; see docs/HPC_SHELF_ROADMAP.md, Phase 3 (reopened 2026-10-03)."
+        "\n  split free; see docs/HPC_SHELF_DECISIONS.md, section 5."
     )
 
     # ----------------------------------------------------------------

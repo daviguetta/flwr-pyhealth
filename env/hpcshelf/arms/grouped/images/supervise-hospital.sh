@@ -2,7 +2,7 @@
 #
 # Application command for a federation HOSPITAL unit.
 #
-# Per the gap #2 decision (docs/HPC_SHELF_INTEGRATION.md, section 4): the
+# Per the gap #2 decision (docs/HPC_SHELF_DECISIONS.md, section 5): the
 # hospital's two Flower processes share this container.
 #
 #   SuperNode            connects out to $SUPERLINK_HOST:$SUPERLINK_PORT (9092)
@@ -17,7 +17,7 @@
 #   SUPERLINK_HOST   the hub's VPN address
 #   SUPERLINK_PORT   the published port of the hub's `fleet` service
 #
-# Replica identity (gap #1, resolved in Phase 2 of docs/HPC_SHELF_ROADMAP.md):
+# Replica identity (gap #1, resolved in Phase 2 of docs/HPC_SHELF_DECISIONS.md):
 #
 #   1. HPCSHELF_UNIT_PLAN       the unit's own plan, written by the UnitAgent.
 #                               plan.replica IS the partition id, so the
@@ -48,7 +48,7 @@ set -euo pipefail
 VENV_BIN="${VENV_BIN:-/python/venv/bin}"
 # The plan is a protobuf generated against protobuf 7.x, so it is parsed with
 # the platform's interpreter, not the Flower one (protobuf 6.x) — mixing them
-# raises VersionError. See docs/HPC_SHELF_INTEGRATION.md section 5.
+# raises VersionError. See docs/HPC_SHELF_DECISIONS.md section 7.
 PLAN_PY="${PLAN_PY:-/opt/hpcshelf/venv/bin/python}"
 CLIENTAPPIO_ADDR="${CLIENTAPPIO_ADDR:-127.0.0.1:9094}"
 

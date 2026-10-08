@@ -8,7 +8,7 @@
 # replica occupies a distinct host replica, which satisfies the HPC Shelf
 # occupancy invariant (C017 / HOST_REPLICA_OVERLAP_COLLISION).
 #
-# See docs/HPC_SHELF_INTEGRATION.md (sections 3.1 and 4).
+# See docs/HPC_SHELF_DECISIONS.md (sections 3 and 5).
 apiVersion: hpcshelf.org/v1
 kind: Component
 

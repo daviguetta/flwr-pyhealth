@@ -2,7 +2,7 @@
 
 Where the federation topology stops being a document and becomes machine-checked
 descriptors. The design and its rationale live in
-[`docs/HPC_SHELF_INTEGRATION.md`](../../../docs/HPC_SHELF_INTEGRATION.md); this
+[`docs/HPC_SHELF_DECISIONS.md`](../../../docs/HPC_SHELF_DECISIONS.md); this
 directory holds the artifacts that the platform's own validators and planner
 consume.
 

@@ -5,7 +5,7 @@ The model is deliberately small and dependency-free: it describes *shape*
 the architecture and checked against any deployment descriptor set.
 
 See ``docs/ARCHITECTURE.md`` for the narrative and
-``docs/HPC_SHELF_ROADMAP.md`` Phase 0 for why it exists.
+``docs/HPC_SHELF_DECISIONS.md`` Fase 0 for why it exists.
 """
 
 from .conformance import Finding, check_conformance, check_model, conforms, render

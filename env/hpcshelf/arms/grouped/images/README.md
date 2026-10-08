@@ -10,7 +10,7 @@ Podman units. Both are leaves: they host no nested components.
 
 Both are built by `Containerfile.flower-unit`, from the same base, differing only
 in the supervisor script they carry. See
-[`docs/HPC_SHELF_INTEGRATION.md`](../../../../docs/HPC_SHELF_INTEGRATION.md)
+[`docs/HPC_SHELF_DECISIONS.md`](../../../../docs/HPC_SHELF_DECISIONS.md)
 section 4 for why a Flower process pair shares one container.
 
 ## Build
