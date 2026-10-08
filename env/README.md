@@ -8,7 +8,7 @@ institutions agreed (`libs/federation_contracts/`).
 | --- | --- |
 | `podman/` | The containerised Flower deployment runtime used for development and for the first real deployments. |
 | `incus/` | The Incus unit topology that hosts one Podman deployment per institution. |
-| `hpcshelf/` | The federation described as HPC Shelf component/application descriptors, plus the proof that the platform's own validator accepts it. |
+| `hpcshelf/` | The federation on HPC Shelf, as two arms — `arms/grouped/` (default) and `arms/three-level/` — plus the proofs that the platform's own validator and planner accept them. |
 
 The project's platform model is **nested containers**: an Incus unit represents
 an institution (server unit or client unit), and inside each unit Podman runs the

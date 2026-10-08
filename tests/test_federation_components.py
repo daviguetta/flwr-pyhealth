@@ -7,7 +7,7 @@ model. That is the claim Phase 0-C rests on.
 Every check also has a negative control here: a deliberately broken realization
 that names the code it must produce. Without them, a clean result would be
 indistinguishable from a checker that verifies nothing — the same reason
-``env/hpcshelf/validate.py`` carries its own controls.
+``env/hpcshelf/arms/grouped/validate.py`` carries its own controls.
 """
 
 from __future__ import annotations

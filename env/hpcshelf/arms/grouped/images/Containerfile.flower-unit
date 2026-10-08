@@ -6,10 +6,14 @@
 # Why the unit images are layered onto the project's Flower application image
 # rather than built `FROM` the platform base:
 #
-#   * the platform base has no Flower, PyHealth or Torch, and it runs Python
-#     3.12 while this project requires >= 3.13;
-#   * the application image already carries all of them, so rebuilding that
-#     stack is avoided.
+#   * the platform base has no Flower, PyHealth or Torch, so using it means
+#     rebuilding that stack;
+#   * the application needs protobuf 6.x and the UnitAgent needs 7.x, so they can
+#     never share one interpreter (see below).
+#
+# The Python version is no longer a reason: the project's floor dropped to
+# `>=3.12` on 2026-10-03, which is what makes `FROM podman-unit-base` viable for
+# a unit that must NEST Podman (the middle level of the three-level arm).
 #
 # The image ends up with TWO interpreters, and that is a requirement rather than
 # an accident:
@@ -25,12 +29,12 @@
 #
 # These units are LEAVES: hub and hospital host no nested components, so the
 # UnitAgent never materialises a Podman child and this image ships no Podman
-# binary. See env/hpcshelf/images/README.md.
+# binary. See env/hpcshelf/arms/grouped/images/README.md.
 #
 # Build:
-#   podman build -f env/hpcshelf/images/Containerfile.flower-unit \
+#   podman build -f env/hpcshelf/arms/grouped/images/Containerfile.flower-unit \
 #     --build-arg SUPERVISOR=supervise-hub.sh \
-#     -t localhost/flower-hub:0.1.0 env/hpcshelf/images
+#     -t localhost/flower-hub:0.1.0 env/hpcshelf/arms/grouped/images
 #
 # Or use scripts/build_hpcshelf_images.sh, which builds both.
 

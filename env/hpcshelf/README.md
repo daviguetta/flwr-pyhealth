@@ -1,111 +1,54 @@
-# `env/hpcshelf/` — federation descriptors for the HPC Shelf platform
+# `env/hpcshelf/` — the federation on HPC Shelf
 
-Where the federation topology stops being a document and becomes machine-checked
-descriptors. The design and its rationale live in
-[`docs/HPC_SHELF_INTEGRATION.md`](../../docs/HPC_SHELF_INTEGRATION.md); this
-directory holds the artifacts that the platform's own validators and planner
-consume.
+The federation topology expressed as HPC Shelf component/application descriptors,
+plus the proofs that the platform's own validator and planner accept them. The
+design and its rationale live in
+[`docs/HPC_SHELF_INTEGRATION.md`](../../docs/HPC_SHELF_INTEGRATION.md).
 
-```text
-env/hpcshelf/
-├── components/
-│   ├── federation-root/0.1/component.yaml      # Incus units: one per institution
-│   └── flower-federation/0.1/component.yaml    # Podman units: hub + hospital
-├── applications/pyhealth-federation.yaml       # placement: 1 hub + 2 hospitals
-├── hosts.yaml                                  # synthetic host inventory
-├── images/                                     # the unit images the platform pulls
-│   ├── Containerfile.flower-unit
-│   ├── supervise-hub.sh
-│   ├── supervise-hospital.sh
-│   └── README.md
-├── patches/                                    # proposed diffs against hpcshelf-model
-│   ├── 0001-unit-identity-environment.patch
-│   └── README.md
-├── validate.py                                 # runs the platform's own checker
-└── publish.py                                  # publishes and materialises the catalog
-```
+There is **one logical model and two physical realizations**. Both arms describe
+the same federation (1 hub + 2 hospitals, `fleet` 9092 crossing the institution
+boundary); they differ in how many Flower processes share a container, and
+therefore in their privacy cost.
 
-## What the descriptors say
+| Arm | Directory | Units | `appio` | Default? |
+| --- | --- | --- | --- | --- |
+| **grouped** | `arms/grouped/` | 6 (one per institution) | loopback inside the container | ✅ |
+| **three-level** | `arms/three-level/` | 9 (one per Flower process) | published on the VPN | ❌ (measured) |
 
-| Unit | Runtime | Runs | Network |
-| --- | --- | --- | --- |
-| `institution[*]` | Incus | the unit host (UnitAgent + nested Podman) | none published |
-| `hub[0]` | Podman | SuperLink + SuperExec ServerApp | publishes `fleet` (9092) |
-| `hospital[*]` | Podman | SuperNode + SuperExec ClientApp | outbound only |
+The grouped arm keeps `appio` (9091/9094) on loopback, so only `fleet` (9092)
+leaves the unit — the privacy-conservative choice, at the cost of two processes
+sharing a container. The three-level arm nests `link`/`node` inside
+`exec-server`/`exec-client` (the direction the logical model calls for), keeps
+the transport units free of any data, but must publish `appio` on the application
+VPN because the platform has no `scope: parent` publication. Read each arm's
+`README.md` for its reasoning and its measured cost.
 
-Only `fleet` (9092) crosses a unit boundary. The SuperLink AppIO (9091) and the
-SuperNode AppIO (9094) are loopback inside their own container — which is why the
-design groups a Flower process pair per institution instead of one container per
-process. See section 4 of the integration document.
+## Shared
 
-## Running the proof
+* `hosts.yaml` — the synthetic host inventory, used by **both** arms so they
+  differ in topology and nothing else.
 
-No infrastructure, no containers, no network, and **nothing is written to the
-platform repository**: its modules are imported read-only.
+## Removed
+
+* `patches/` — the `0001-unit-identity-environment.patch` was **withdrawn**
+  (2026-09-25): the platform already injects `HPCSHELF_UNIT_PLAN` for every unit,
+  root and nested, so the patch's premise was wrong. Removed from the tree;
+  provenance is in git history and in `docs/HPC_SHELF_ROADMAP.md` (Fase 2).
+
+## Running the proofs
 
 ```bash
-scripts/validate_hpcshelf.sh
+scripts/validate_hpcshelf.sh                       # grouped arm: descriptors + negative controls + planner
+scripts/build_hpcshelf_images.sh                   # grouped arm: unit images
+scripts/smoke_hpcshelf_images.sh                   # grouped arm: Flower wiring, no platform
+
+scripts/validate_hpcshelf_three_level.sh            # three-level arm: 39 checks, measures both arms
+scripts/build_hpcshelf_three_level.sh               # three-level arm: 4 unit images
+scripts/smoke_hpcshelf_three_level.sh               # three-level arm: 22 checks
+
+scripts/publish_hpcshelf_images.sh --registry localhost:5000 --insecure   # grouped arm: publication
 ```
 
-And the functional proof of the unit images (Flower wiring, not the platform's
-control plane):
-
-```bash
-scripts/build_hpcshelf_images.sh
-scripts/smoke_hpcshelf_images.sh
-```
-
-And the publication path (rehearsable against any registry):
-
-```bash
-scripts/publish_hpcshelf_images.sh --registry localhost:5000 --insecure
-```
-
-Or directly, with any interpreter carrying the platform's pinned dependencies:
-
-```bash
-HPCSHELF_MODEL_ROOT=/path/to/hpcshelf-model \
-    /tmp/hpcshelf-val-venv/bin/python env/hpcshelf/validate.py
-```
-
-The script reports four groups: a positive semantic validation, negative controls
-for each validation code the decomposition must avoid, a positive planner run,
-and the environment bindings the planner produced.
-
-### Creating the validation environment
-
-The platform pins `pydantic==2.13.5` and `PyYAML==6.0.3`; the project's own venv
-carries different versions, so use a separate one:
-
-```bash
-uv venv /tmp/hpcshelf-val-venv --python 3.12
-uv pip install --python /tmp/hpcshelf-val-venv/bin/python \
-    -r "$HPCSHELF_MODEL_ROOT/requirements.txt"
-```
-
-## What the proof establishes — and what it does not
-
-**Established:** the decomposition is accepted by the platform's
-`SemanticValidator` with no errors, and specifically produces none of `C017`
-(host-replica occupancy collision), `C007` (child unit without overlap), `D004`
-(placement on a non-root unit), `D007` (`oneToOne` cardinality mismatch) or
-`C002` (dependency target outside the component). The `DeploymentPlanner` then
-materialises 3 Incus root units and 3 nested Podman units, wires
-`hospital[*]` under `institution[1..2]`, and injects `SUPERLINK_HOST` (the hub's
-VPN address) and `SUPERLINK_PORT` (the published port of `fleet`).
-
-Each negative control deliberately introduces one violation and asserts the
-corresponding code fires. Without them, a passing validation would be
-indistinguishable from a validator that checks nothing.
-
-**Not established:** that any of this deploys. The host inventory is synthetic and
-nothing here has been run against the HPC Shelf control plane. This is a design
-proof, not a deployment. The unit images themselves are built and functionally
-tested separately — see `images/README.md`.
-
-## Status
-
-Phase 1 of the integration plan: the descriptors are frozen and proven. Phase 2
-built the unit images (`images/`); their publication is a separate, authorised
-step. The next functional work is Phase 3, the per-replica `partition-id`
-injection.
+Nothing here deploys anything: the descriptors are validated read-only against a
+clone of `hpcshelf-model` (`HPCSHELF_MODEL_ROOT`), and the images are built and
+tested locally.

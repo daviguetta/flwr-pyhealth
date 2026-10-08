@@ -1,0 +1,113 @@
+# Component `exec` — the MIDDLE level of the three-level arm.
+#
+# One unit per SuperExec, and the communication component nested inside it:
+# `link` inside `exec-server`, `node[i]` inside `exec-client[i]`. This is the
+# containment the logical model calls for — the SuperExec is a client of the API
+# exposed by the process beside it — expressed with the only mechanism the
+# platform has for it, `nestedComponents` + `overlap`.
+#
+# WHY THERE IS NO `dependencies:` BLOCK HERE
+#
+# The vertical bindings of the logical model (`exec-server -> link.appio`,
+# `exec-client -> node.appio`) are NOT declarable. `dependencies.<x>.target` must
+# name a unit of the SAME component (C002), and the planner resolves it inside
+# one `component_path`; a parent and the child it hosts are in different ones.
+# The arm's answer is to read the parent's own unit plan
+# (`UnitPlan.children[].services[]`) and dial `127.0.0.1:<published_port>`, which
+# the platform's nested runtime forwards into the parent's namespace. See
+# `../images/supervise-exec.sh` for the mechanism and the startup ordering it has
+# to absorb.
+#
+# That is a real finding, not a workaround: it is why the ~10 lines of plan
+# reading in the exec supervisor are load-bearing, and `../validate.py` asserts
+# the refusal (C002) so the claim stays falsifiable.
+#
+# The HORIZONTAL binding is not here: it lives in `comunicacao`, between the two
+# units that must actually talk across hosts.
+apiVersion: hpcshelf.org/v1
+kind: Component
+
+metadata:
+  name: exec
+  version: "0.1"
+
+spec:
+  units:
+    exec-server:
+      image: catalog.hpcshelf.org/pyhealth/flower-exec-server:0.1.0
+
+      replicas:
+        min: 1
+        max: 1
+        default: 1
+
+      application:
+        command:
+          - /opt/hpcshelf/supervise-exec-server.sh
+        environment:
+          # Read by `flower_app.server_app._config`, which lets the deployment pin
+          # the policy without editing `pyproject.toml`. References: FedAvg,
+          # McMahan et al. 2017; FedProx, Li et al. 2018. DP stays `none` because
+          # a budget is a deliberate, recorded choice (Phase 7).
+          PYHEALTH_STRATEGY: "fedavg"
+          PYHEALTH_DP_MODE: "none"
+          PYHEALTH_PROXIMAL_MU: "0.0"
+          # Must equal the `comunicacao` node count and the app's
+          # `num-partitions`; `../validate.py` refuses drift.
+          PYHEALTH_NUM_PARTITIONS: "2"
+
+    exec-client:
+      image: catalog.hpcshelf.org/pyhealth/flower-exec-client:0.1.0
+
+      replicas:
+        min: 1
+        max: 8
+        default: 2
+
+      application:
+        command:
+          - /opt/hpcshelf/supervise-exec-client.sh
+        environment:
+          # The ClientApp is the only process of this arm that reads patient
+          # records, and it reads them from inside this unit.
+          PYHEALTH_PARTITION_SCHEME: "uniform"
+
+  nestedComponents:
+    comm:
+      component:
+        ref: "comunicacao:0.1"
+
+      units:
+        link:
+          replicas: 1
+        node:
+          replicas: 2
+
+      # Occupancy, collision-free under C017 because the two inner units use
+      # different host units:
+      #   exec-server[0] <- link[0]
+      #   exec-client[i] <- node[i]
+      #
+      # `node[i] -> exec-client[i]` is the identity alignment the arm depends on:
+      # the SuperNode publishes `partition-id = <its own replica>` through
+      # `--node-config`, and the ClientApp running in the parent reads it from
+      # `context.node_config`. `../validate.py` asserts parent.replica ==
+      # child.replica for every node, so the two can never drift.
+      overlap:
+        link:
+          hostUnit: exec-server
+          mapping:
+            type: explicit
+            instances:
+              - innerReplica: 0
+                hostReplica: 0
+
+        node:
+          hostUnit: exec-client
+          mapping:
+            type: explicit
+            instances:
+              - innerReplica: 0
+                hostReplica: 0
+              - innerReplica: 1
+                hostReplica: 1

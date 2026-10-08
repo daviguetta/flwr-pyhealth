@@ -14,14 +14,14 @@ images.
 
 Usage:
     HPCSHELF_MODEL_ROOT=/path/to/hpcshelf-model \\
-        /path/to/venv/bin/python env/hpcshelf/publish.py --registry localhost:5000
+        /path/to/venv/bin/python env/hpcshelf/arms/grouped/publish.py --registry localhost:5000
 
 `scripts/publish_hpcshelf_images.sh` wraps the call with the environment checks.
 
 This writes to the registry it is given and to `--catalog-root` (default
 `build/hpcshelf-catalog`, which is not versioned). Publication to the platform's
 registry requires explicit operator authorisation; see
-env/hpcshelf/images/README.md.
+env/hpcshelf/arms/grouped/images/README.md.
 """
 
 from __future__ import annotations
@@ -40,9 +40,9 @@ from pathlib import Path
 import yaml
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent.parent
+ROOT = HERE.parents[3]
 COMPONENT_FILES = sorted((HERE / "components").glob("*/*/component.yaml"))
-HOSTS_FILE = HERE / "hosts.yaml"
+HOSTS_FILE = HERE.parent.parent / "hosts.yaml"
 APPLICATION_FILE = HERE / "applications" / "pyhealth-federation.yaml"
 
 DEFAULT_MODEL_ROOT = Path("/tmp/hpcshelf-model")

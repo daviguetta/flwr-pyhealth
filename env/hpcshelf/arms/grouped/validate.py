@@ -7,7 +7,7 @@ Runs, with no infrastructure and **without writing to the platform repository**:
   2. negative controls proving the validator really catches the violations the
      decomposition must avoid: C017, C007, D004, D007 and C002 — including the
      component model's own four-unit decomposition, so the R3/R6 collision is a
-     reproducible result instead of an argument (`env/hpcshelf/model_split.py`);
+     reproducible result instead of an argument (`env/hpcshelf/arms/grouped/model_split.py`);
   3. `DeploymentPlanner`, proving the horizontal dependency resolves (R3) and
      that `SUPERLINK_HOST`/`SUPERLINK_PORT` are injected (R4/R5).
 
@@ -16,7 +16,7 @@ created, changed or committed there.
 
 Usage:
     HPCSHELF_MODEL_ROOT=/path/to/hpcshelf-model \\
-        /path/to/venv/bin/python env/hpcshelf/validate.py
+        /path/to/venv/bin/python env/hpcshelf/arms/grouped/validate.py
 
 The interpreter needs the dependencies pinned in the platform's
 `requirements.txt` (`pydantic==2.13.5`, `PyYAML==6.0.3`). Create one with:
@@ -42,7 +42,7 @@ sys.dont_write_bytecode = True
 
 HERE = Path(__file__).resolve().parent
 APPLICATION_FILE = HERE / "applications" / "pyhealth-federation.yaml"
-HOSTS_FILE = HERE / "hosts.yaml"
+HOSTS_FILE = HERE.parent.parent / "hosts.yaml"
 COMPONENT_FILES = sorted((HERE / "components").glob("*/*/component.yaml"))
 
 DEFAULT_MODEL_ROOT = Path("/tmp/hpcshelf-model")

@@ -1,0 +1,87 @@
+# Unit image for the COMMUNICATION units of the three-level arm:
+# `flower-link` (SuperLink) and `flower-node` (SuperNode).
+#
+# WHY THIS IMAGE IS MINIMAL ON PURPOSE
+#
+# `link` and `node` are transport. They never load the Flower app, never build a
+# model and never read a record, so this image installs the Flower runtime and
+# nothing else:
+#
+#   * no `flower_app`, no `libs`, no `data/`  -> the MIMIC demo is not in the
+#     image that sits on the network path;
+#   * no torch, no pyhealth                   -> ~1 GB instead of ~8 GB;
+#   * no Podman binary                        -> these units nest nothing.
+#
+# That is a property of the separated topology, not a nicety: in the grouped arm
+# the same process shares a container with the ClientApp that owns the patient
+# partition, so the transport needs whatever the app needs. Here the boundary is
+# the image, and `scripts/smoke_hpcshelf_three_level.sh` asserts it (no torch, no
+# pyhealth, no `data/`).
+#
+# WHY `podman-unit-base` AND NOT THE PROJECT'S APPLICATION IMAGE
+#
+# These are platform units: they must carry the UnitAgent, `/opt/hpcshelf/venv`
+# and the plan-reading bootstrap, which the base already has. Building FROM the
+# application image would drag the app and the corpus back in.
+#
+# Podman arrives with the base and is purged here: a unit that nests nothing has
+# no business shipping a container runtime, and `HPCSHELF_PODMAN_RUNTIME=mock`
+# makes the intent explicit to the UnitAgent (the same two lines the grouped arm's
+# leaf images carry).
+#
+# Two interpreters, for the same reason as everywhere else in this integration:
+#
+#   /opt/hpcshelf/venv      Python 3.12 + protobuf 7.x -> UnitAgent + plan reading
+#   /opt/hpcshelf/app-venv  Python 3.12 + protobuf 6.x -> flower-superlink / flower-supernode
+#
+# Flower 1.34 declares `protobuf>=5.28.0,<7.0.0` while the platform's generated
+# modules need gencode >= 7.35.1, so they cannot share an interpreter.
+#
+# Build (context is this directory, so no application source is needed):
+#
+#   podman build -f env/hpcshelf/arms/three-level/images/Containerfile.flower-comm \
+#     --build-arg SUPERVISOR=supervise-link.sh \
+#     -t localhost/flower-link:0.1.0 env/hpcshelf/arms/three-level/images
+#
+# Or use `scripts/build_hpcshelf_three_level.sh`, which builds both roles.
+#
+# See ../README.md.
+
+ARG UNIT_BASE=localhost/podman-unit-base:local
+ARG FLWR_VERSION=1.34.0
+ARG SUPERVISOR=supervise-link.sh
+
+FROM ${UNIT_BASE}
+
+# A leaf unit: no nested runtime, no Podman child, no Podman socket.
+ENV HPCSHELF_NESTED_RUNTIME_ENABLED=false \
+    HPCSHELF_PODMAN_RUNTIME=mock
+
+# Drop the container runtime the base brings. `--auto-remove` takes the packages
+# podman pulled in with it; the UnitAgent needs none of them under the mock
+# runtime.
+RUN apt-get purge -y --auto-remove podman \
+    && rm -rf /var/lib/apt/lists/*
+
+# The transport runtime, pinned to the version the rest of the project pins.
+# `flwr` without extras: no Ray (deployment, not simulation) and no dp-accounting
+# (the SuperLink never wraps a strategy).
+ARG FLWR_VERSION
+RUN /usr/bin/python3 -m venv /opt/hpcshelf/app-venv \
+    && /opt/hpcshelf/app-venv/bin/pip install --no-cache-dir --disable-pip-version-check \
+         "flwr==${FLWR_VERSION}"
+
+# One shared supervisor body plus a per-role wrapper, for the same reason the exec
+# images do it: the role must be impossible to share by accident.
+COPY supervise-comm.sh /opt/hpcshelf/
+ARG SUPERVISOR
+COPY ${SUPERVISOR} /opt/hpcshelf/
+RUN chmod +x /opt/hpcshelf/supervise-comm.sh "/opt/hpcshelf/${SUPERVISOR}"
+
+# The platform launches the application command with this working directory.
+# Nothing is needed here — the transport carries no application.
+WORKDIR /application
+
+# PID 1 stays the platform's entrypoint: it starts the UnitAgent, which in turn
+# launches the supervisor named in the unit plan.
+CMD ["/opt/hpcshelf/entrypoint.sh"]

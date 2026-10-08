@@ -3,7 +3,7 @@
 # Prove the frozen federation decomposition against the HPC Shelf platform.
 #
 # Runs the platform's own SemanticValidator and DeploymentPlanner over the
-# descriptors in env/hpcshelf/. No infrastructure is needed and nothing is
+# descriptors in env/hpcshelf/arms/grouped/. No infrastructure is needed and nothing is
 # written to the platform repository: its modules are imported read-only from
 # HPCSHELF_MODEL_ROOT.
 #
@@ -52,4 +52,4 @@ echo "platform:    $MODEL_ROOT"
 echo "interpreter: $PYTHON"
 "$PYTHON" -c 'import pydantic; print("pydantic:    " + pydantic.VERSION)'
 
-exec "$PYTHON" env/hpcshelf/validate.py
+exec "$PYTHON" env/hpcshelf/arms/grouped/validate.py

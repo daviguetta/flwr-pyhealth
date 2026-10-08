@@ -1,4 +1,4 @@
-# HPC Shelf — o que falta para publicar
+# HPC Shelf — o que falta para publicar, e um conceito que pedimos
 
 Rascunho de mensagem para o orientador. O detalhamento técnico está nos arquivos
 referenciados ao final; aqui ficam só o contexto e os pedidos.
@@ -8,9 +8,13 @@ referenciados ao final; aqui ficam só o contexto e os pedidos.
 A camada de federação (Flower + PyHealth) está descrita como componentes do HPC
 Shelf e passa no validador da plataforma. As imagens de unidade estão construídas
 e testadas funcionalmente. Falta publicá-las no catálogo — o que depende de três
-confirmações. **Nenhum patch na plataforma é necessário**: a identidade por
-réplica, que era o único bloqueio funcional, passou a ser lida do próprio plano
-da unidade.
+confirmações — e há **um** pedido de plataforma, na Parte 3: um conceito de
+**serviço interno**. Nada de patch para a identidade por réplica: ela passou a ser
+lida do próprio plano da unidade, e aquele pedido foi retirado.
+
+> **Ordem de leitura.** A Parte 1 é operacional (publicar). A Parte 2 está
+> **resolvida** e fica como registro do raciocínio. A Parte 3 é a única mudança de
+> plataforma que ainda pedimos.
 
 ## Parte 1 — três confirmações para publicar
 
@@ -74,15 +78,15 @@ flower-federation:0.1    sha256:2f7772db5a9b236dfa3d6cd707e2929f38db7ae6f091f961
 > assim.
 >
 > O supervisor do hospital agora lê o mesmo plano
-> (`env/hpcshelf/images/supervise-hospital.sh`), então a lacuna #1 fecha **sem
+> (`env/hpcshelf/arms/grouped/images/supervise-hospital.sh`), então a lacuna #1 fecha **sem
 > tocar na plataforma**. Verificado por `scripts/smoke_hpcshelf_images.sh` →
 > **10 passed, 0 failed**, incluindo "a hospital derived its partition from its
 > own unit plan" — e com um `PYHEALTH_PARTITION_ID` conflitante de propósito,
 > para provar que o plano vence um binding compartilhado.
 >
-> O texto abaixo fica como registro do raciocínio. O patch continua em
-> `env/hpcshelf/patches/` apenas para proveniência e como reserva, caso
-> `HPCSHELF_UNIT_PLAN` deixe de existir.
+> O texto abaixo fica como registro do raciocínio. O patch foi **removido da
+> árvore** na reorganização de `env/` (a proveniência fica no histórico git); a
+> reserva só voltaria a fazer sentido caso `HPCSHELF_UNIT_PLAN` deixe de existir.
 
 **O problema.** `application.environment` no descritor carrega **um valor
 compartilhado por todas as réplicas**. Não há como uma unidade saber *qual*
@@ -145,12 +149,78 @@ falhar porque o modo de falha que isso evita é silencioso — mas é decisão d
 quem mantém a plataforma, e está a um `raise` de distância de virar uma linha de
 log.
 
+## Parte 3 — um conceito que falta: serviço interno
+
+Esta é a única mudança de plataforma que ainda pedimos. Ela não é necessária
+para o que está funcionando — é o que dissolve uma escolha que hoje é forçada.
+
+**O que já existe, e verificamos.** O endereçamento vertical funciona e não
+precisa de patch. `_collect_forwarded_services` mantém a `published_port`
+constante por todos os níveis (*"the published port propagates through
+intermediate namespaces until the service-owning unit is reached"*), então a
+unidade pai alcança o serviço da unidade aninhada no próprio namespace. E o pai
+descobre o endereço sozinho: `UnitPlan.children` já traz os `ServiceEndpoint` de
+todo descendente — demonstramos a leitura do plano devolvendo
+`--appio-api-address 127.0.0.1:30000` sem nada injetado no ambiente.
+
+**O que falta.** Não há como declarar que um serviço existe **só** para o pai.
+`ServiceDefinition` tem `protocol`, `containerPort` e `environment` — nada de
+escopo. E `hostagent/endpoint_publisher.py` publica **todos** os descendentes no
+endereço VPN do host, recursivamente e sem filtro:
+
+```python
+# EndpointPublisher.build_publications
+#   Root-owned service:       VPN:published -> Incus:container_port
+#   Descendant-owned service: VPN:published -> Incus:published_port
+for child in root_unit.children:
+    for (... published_port, ...) in self._collect_services(child):   # recursivo
+        publications.append(EndpointPublication(vpn_address=local_vpn_address, ...))
+```
+
+Medido nos dois desenhos, no `DeploymentPlanner`:
+
+```text
+3 níveis   link[0]  appio 9091 -> publicado:30000 @vpn:10.201.0.1   ← appio no endereço VPN
+           node[0]  appio 9094 -> publicado:30000 @vpn:10.201.0.2
+agrupado   hub[0]   fleet 9092 -> 30000                             ← appio não é service
+```
+
+**Por que isso importa.** A regra que o senhor enunciou é que *a unidade host
+orquestra os serviços das unidades aninhadas*. Um serviço que existe só para o
+pai orquestrar não deveria ser publicado na federação — e o `appio` não carrega
+só tarefas: em Flower, as atualizações de peso viajam SuperExec → SuperNode por
+AppIO e só depois pelo `fleet`. Publicá-lo no endereço VPN deixa o canal de peso
+alcançável por qualquer host participante.
+
+Isso também é o que obriga o agrupamento. Não é uma preferência de estilo: hoje
+"separar as unidades" e "manter `appio` fora da rede" são incompatíveis. Foi por
+isso que a Fase 3 concluiu que `M103` (o invariante de que `appio` não cruza
+fronteira) estava sendo violado pela separação.
+
+**O pedido.** Uma forma de declarar serviço interno — `scope: parent`, ou
+qualquer nome que o senhor prefira — honrada em dois pontos: `EndpointPublisher`
+não o publica, e `_collect_forwarded_services` mantém o encaminhamento apenas até
+o pai imediato. Com esse conceito:
+
+| | agrupado (hoje) | 3 níveis, sem o conceito | 3 níveis, com `scope: parent` |
+| --- | :---: | :---: | :---: |
+| `appio` só no namespace do pai | ✅ | ❌ | ✅ |
+| Aninhamento `SuperExec → link`/`node` | ❌ | ✅ | ✅ |
+| `appio` no endereço VPN | não | **sim** | **não** |
+
+Ou seja: `M103` é um **proxy** do invariante, exato só enquanto a plataforma não
+souber declarar serviço interno. Com o conceito, a separação deixa de ser um
+trade e passa a ser escolha de conveniência. É uma mudança aditiva, no mesmo
+formato do `0001` (campo no modelo + filtro no publicador + testes), e podemos
+entregar o patch testado se o senhor concordar com o conceito.
+
 ## O que já está pronto e verificado
 
 | Prova | Resultado | Comando |
 | --- | :---: | --- |
-| Desenho aceito pela plataforma | 25/25 | `scripts/validate_hpcshelf.sh` |
-| Imagens funcionando (dois nós registram; identidade vinda do plano da unidade) | 10/10 | `scripts/smoke_hpcshelf_images.sh` |
+| Desenho aceito pela plataforma | 28/28 | `scripts/validate_hpcshelf.sh` |
+| Imagens funcionando (dois nós registram; identidade vinda do plano da unidade) | 16/16 | `scripts/smoke_hpcshelf_images.sh` |
+| Conformidade com o modelo de componentes | 2/2 | `python -m libs.federation_components` |
 | Caminho de publicação (registry local) | 18/18 | `scripts/publish_hpcshelf_images.sh --registry localhost:5000 --insecure` |
 
 ## Pedidos
@@ -159,13 +229,16 @@ log.
    quem as tem.
 2. O caminho de projeto correto (o `pyhealth` está certo?).
 3. Confirmação da base da unidade raiz (`hpcshelf-unit-base`, release 1.4).
+4. **Decisão sobre a Parte 3:** aceita o conceito de serviço interno
+   (`scope: parent`)? Se sim, entregamos o patch testado; se não, a decisão de
+   agrupamento da Fase 3 volta a valer como estava, com o raciocínio preservado.
 
 ## Referências neste repositório
 
 * [`docs/HPC_SHELF_INTEGRATION.md`](HPC_SHELF_INTEGRATION.md) — desenho, decisões,
   resultados das fases e o que ficou em aberto.
-* [`env/hpcshelf/patches/README.md`](../env/hpcshelf/patches/README.md) — o patch,
-  sua justificativa e a verificação.
-* [`env/hpcshelf/images/README.md`](../env/hpcshelf/images/README.md) — como as
+* ~~`env/hpcshelf/patches/`~~ — removido na reorganização de `env/`; o patch
+  retirado (`0001-unit-identity-environment.patch`) e sua justificativa ficam no
+  histórico git (`docs/HPC_SHELF_ROADMAP.md`, Fase 2).
+* [`env/hpcshelf/arms/grouped/images/README.md`](../env/hpcshelf/arms/grouped/images/README.md) — como as
   imagens são construídas e o que a publicação exige.
-* `env/hpcshelf/patches/0001-unit-identity-environment.patch` — o diff.

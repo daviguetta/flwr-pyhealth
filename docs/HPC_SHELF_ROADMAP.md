@@ -6,13 +6,17 @@ de saída, e só começa quando a anterior tem o critério satisfeito.
 
 | Campo | Valor |
 | --- | --- |
-| **Fase atual** | **Fases 0 (0-C) e 1 concluídas** (2026-09-25) — próxima: Fase 3 (descritores do modelo-alvo), agora com base formal |
+| **Fase atual** | **Fases 0 (0-C) a 5 concluídas** (2026-09-25) — próxima: **Fase 6** (run federado completo) |
 | **Branch** | `feat/hpcshelf-component-model` |
 | **Modelo-alvo** | comunicação (`link` + `node`) e exec (`exec-server` + `exec-client`), ligados por `appio` (intra-unidade) e `fleet` (inter-unidade) |
-| **Bloqueio do momento** | decisão de escopo da Fase 0 (seção 4.0) |
-| **Baseline verde** | `scripts/validate_hpcshelf.sh` → **25 passed, 0 failed** (re-verificado em 2026-09-25) |
+| **Lógico × físico** | o modelo acima é **lógico**. A realização física agrupa `link`+`exec-server` e `node`+`exec-client`, e isso é **propriedade defendida**, não concessão: é o agrupamento que mantém `appio` em loopback (seção 4, Fase 3). A realização **separada** (um processo por unidade) existe em `env/hpcshelf/arms/three-level/`, medida e **não** registrada como conforme — ver a Fase 3 |
+| **Trabalho em curso** | comparativo de **três braços** — `agrupado` × `3 níveis` × `3 níveis + scope:parent` (2026-10-03). Os **dois primeiros braços estão construídos e medidos** (descritores, 4 imagens e os dois validadores em `env/hpcshelf/arms/three-level/`); o terceiro depende da capacidade `scope: parent` da plataforma. Ele decide a **reabertura da Fase 3**; ver a nota ao fim daquela fase |
+| **Piso do Python** | `>=3.12` (era `>=3.13`; baixado em 2026-10-03, com suíte verde idêntica em 3.12.13) |
+| **Bloqueio do momento** | Fase 6 — material mTLS, Incus + HostAgent, e os 501 MB da imagem base do root, que só o orientador tem (seção 4, Fase 6) |
+| **Baseline verde** | `validate_hpcshelf.sh` **28/28** · `smoke_hpcshelf_images.sh` **16/16** · `python -m libs.federation_components` **2/2 conformes** · `scripts/test.sh` **64 passed, 11 deselected** (re-verificado em 2026-10-03; ver a ressalva sobre argumentos na seção 6). Braço `3 níveis`: `validate_hpcshelf_three_level.sh` **39/39**, `smoke_hpcshelf_three_level.sh` **22/22**, guarda de build **9/9** |
 | **Desenho de referência** | [`HPC_SHELF_INTEGRATION.md`](HPC_SHELF_INTEGRATION.md) |
 | **Enquadramento conceitual** | ver seção 2 (modelo do orientador) |
+| **Registro de cada fase** | seção 6 — comando e saída, não opinião |
 
 ## 1. Como este arquivo é usado
 
@@ -187,7 +191,7 @@ Satisfeita pelos mesmos artefatos da 0-C: a 0-C **é** o congelamento do modelo.
 **Objetivo.** Cada unidade descobrir *qual* réplica ela é, sem literal no
 `application.environment` do descritor e sem adivinhar.
 
-**Artefato.** `env/hpcshelf/images/supervise-hospital.sh` lendo `plan.replica`.
+**Artefato.** `env/hpcshelf/arms/grouped/images/supervise-hospital.sh` lendo `plan.replica`.
 
 **Critério de saída.**
 - [x] Verificado que `HPCSHELF_UNIT_PLAN` → `/etc/hpcshelf/unit-plan.pb` está
@@ -228,8 +232,8 @@ plataforma resolve isso com um teste que falha quando o valor diverge do plano
 **Objetivo.** Expressar o modelo da Fase 1 em descritores HPC Shelf e provar o
 que a plataforma aceita e recusa.
 
-**Artefato.** `env/hpcshelf/model_split.py` + controles novos em
-`env/hpcshelf/validate.py`.
+**Artefato.** `env/hpcshelf/arms/grouped/model_split.py` + controles novos em
+`env/hpcshelf/arms/grouped/validate.py`.
 
 **Critério de saída.**
 - [x] Descritores declaram as interfaces: `link` provê `appio`/`fleet`/`control`;
@@ -288,7 +292,74 @@ defendida**: é ele que mantém `appio` em loopback.
   A §4.5 do documento de integração permanece como registro, marcada como não
   solicitada.
 
-**Bloqueio.** Nenhum. Fase fechada.
+**Bloqueio.** Nenhum, à época. Fase fechada — e **reaberta em 2026-10-03**, abaixo.
+
+> **Reaberta em 2026-10-03.** O raciocínio acima trata o trade como binário: ou o
+> `appio` cruza fronteira de contêiner (violando `M103`), ou se agrupa. Dois
+> fatos apurados depois mostram que há terceira via, e que o obstáculo não é de
+> capacidade:
+>
+> 1. **O endereçamento vertical existe.** `_collect_forwarded_services` mantém a
+>    `published_port` constante por todos os níveis, e o pai alcança o serviço do
+>    filho no próprio namespace. Nenhum patch de dependência é necessário: o pai
+>    deriva o endereço lendo o próprio plano (`UnitPlan.children`).
+> 2. **Mas a plataforma publica todos os descendentes no endereço VPN.**
+>    `hostagent/endpoint_publisher.py` é recursivo e não filtra:
+>    `VPN:published -> Incus:...` para cada serviço de cada descendente. Então na
+>    variante 2 o `appio` fica alcançável por qualquer host da federação. É
+>    **isso**, e não a fronteira de contêiner em si, que o invariante protege.
+>
+> **O que muda:** `M103` é um **proxy** do invariante, não o invariante. O que se
+> quer é "`appio` não alcançável além do seu pai imediato". Enquanto a plataforma
+> não souber declarar um serviço interno, o proxy é exato — e é por isso que o
+> agrupamento funcionava. Com serviço declarado interno (`scope: parent`, campo
+> **ausente** em `ServiceDefinition`), o proxy deixa de ser necessário.
+>
+> **Leitura corrigida da decisão:** não é "a separação é indesejável"; é "a
+> separação exige uma capacidade da plataforma que ainda não existe". Se o
+> invariante que vale é a exposição (e não a fronteira física), a variante 2 é
+> aceitável assim que `scope: parent` existir. O comparativo de três braços mede
+> exatamente isso, e é ele que fecha ou reafirma esta fase.
+>
+> O raciocínio original fica preservado: se o professor recusar o conceito de
+> serviço interno, a decisão de 2026-09-25 volta a valer como estava.
+
+**Braços 1 e 2 construídos e medidos (2026-10-05).** `env/hpcshelf/arms/three-level/` é
+o braço `3 níveis` como artefato executável: 3 descritores (`comunicacao`,
+`exec`, `three-level-root`), a aplicação, 4 imagens de unidade e dois provadores.
+O plano materializa 9 unidades em 3 níveis — `institution[i]` (Incus) →
+`exec-*` (Podman) → `link`/`node` (Podman) — e a medição é feita pelo **mesmo**
+`EndpointPublisher` nos dois braços, no mesmo processo:
+
+| Braço | Unidades | `appio` publicado | Endereço | Imagem de transporte |
+| --- | :---: | :---: | --- | --- |
+| `agrupado` (`env/hpcshelf/`) | 6 | **0** | loopback dentro do contêiner | n/a (mesma imagem) |
+| `3 níveis` (`arms/three-level/`) | 9 | **3** | `10.201.0.{1,2,3}:30000` | sem corpus, sem stack de ML (~1,1 GB vs ~7,3 GB) |
+
+Três conclusões que a execução produziu:
+
+1. **A ligação vertical não é declarável, e isso agora é um controle negativo.**
+   Declarar `exec-server -> link.appio` como `dependencies` falha com **C002**
+   (`arms/three-level/validate.py` afirma esse código). O endereço só existe porque o
+   pai lê o próprio plano (`UnitPlan.children[].services[]`) e disca
+   `127.0.0.1:<published_port>` — mecanismo exercitado pelo smoke, com controle
+   negativo para o caso de não haver filho (falha em vez de ficar ocioso).
+2. **O que a separação compra é verificável no artefato, não só no argumento.**
+   `flower-link`/`flower-node` não contêm `data/`, `flower_app`, torch nem
+   pyhealth: as unidades de transporte não conseguem ler um registro. No braço
+   agrupado isso é impossível por construção.
+3. **Uma federação inteira em um só host não é expressável neste braço.** A
+   composição aninhada comporta uma réplica interna por réplica de host, então
+   `exec-server` e `exec-client` no mesmo `institution` é recusado com **C017**
+   (afirmado em `validate.py`). Co-localizar por composições separadas é
+   permitido, mas rompe `node → link`, porque dependência só resolve dentro de um
+   `component_path`. Um host = um papel = uma fronteira de dados.
+
+Provas do braço: build + guarda de papéis **9/9**,
+`scripts/validate_hpcshelf_three_level.sh` **39/39**,
+`scripts/smoke_hpcshelf_three_level.sh` **22/22**. O braço **não** é registrado como
+`Realization` em `libs/federation_components`: ele gasta `M103` por construção, e
+um verificador com exceção para o caso que ele existe para pegar seria mais fraco.
 
 ---
 
@@ -449,11 +520,22 @@ Itens já registrados como lacunas #3, #4 e #6 na integração.
 
 | Data | Fase | Evidência | Resultado |
 | --- | --- | --- | --- |
+| 2026-10-05 | 3 | `env/hpcshelf/arms/three-level/`: 3 descritores + aplicação + `validate.py` (`HPCSHELF_MODEL_ROOT=~/projetos/exp/hpc-shelf/hpcshelf-model scripts/validate_hpcshelf_three_level.sh`) | **39/39** — 9 unidades em 3 níveis; `fleet` injetado; `appio` publicado em `10.201.0.{1,2,3}:30000`; **C002** no controle negativo da ligação vertical declarada; **D012**/**C017** ainda policiam o `overlap` |
+| 2026-10-05 | 4 | `Containerfile.flower-comm` + `supervise-{comm,link,node}.sh`; build com guarda de papéis das 4 imagens | **9/9** — transporte sem corpus/torch/pyhealth/`data/`, 4 camadas distintas, 1 papel por imagem; `flower-link`/`flower-node` em **1,1 GB** contra **7,3 GB** do `exec` |
+| 2026-10-05 | 5 | `scripts/smoke_hpcshelf_three_level.sh` | **22/22** — `appio` em `0.0.0.0` (não loopback) nos dois papéis; 2 nodes registram no `link` com partição própria; node recusa sem `SUPERLINK_HOST` e sem identidade; pai lê a porta do filho do próprio plano e falha rápido sem filho |
+| 2026-10-03 | — | piso do Python: `requires-python` `>=3.13` → `>=3.12`, `.python-version`, ruff `py312` | pré-requisito do braço "3 níveis" (o nível do meio aninha Podman e vem de `podman-unit-base`, que é 3.12) |
+| 2026-10-03 | — | suíte em 3.12.13 (`/var/tmp/pyhealth312`, e depois o `.venv` canônico) | **64 passed, 11 deselected** e **75 passed** — idêntico ao 3.13 |
+| 2026-10-03 | — | `uv lock` + `git diff uv.lock` | re-lock necessário (o piso muda os marcadores). **Nenhuma versão de pacote mudou** — torch 2.7.1, numpy 2.2.6, pyhealth 2.0.1, flwr 1.34.0 intactos |
+| 2026-10-03 | — | `HPCSHELF_MODEL_ROOT=~/projetos/exp/hpc-shelf/hpcshelf-model scripts/validate_hpcshelf.sh` | **28/28** contra o clone canônico (que tem `federated-learning` e `fl_unit/` não commitados) |
+| 2026-10-03 | — | `scripts/smoke_hpcshelf_images.sh` | **16/16** |
+| 2026-10-03 | 3 | `EndpointPublisher.build_publications` + `client_server_verifier._target` | reabertura registrada acima |
+| 2026-10-03 | — | re-verificação do baseline, sem mudança de código: `scripts/validate_hpcshelf.sh`, `scripts/smoke_hpcshelf_images.sh`, `python -m libs.federation_components`, `scripts/test.sh` | **28/28**, **16/16**, **2/2 conformes**, **64 passed** — baseline confirmado |
+| 2026-10-03 | — | defeito encontrado em `scripts/test.sh`: `${1}` não é removido, então o pytest recebe a seleção como caminho | `test.sh fast`, `test.sh slow` e `test.sh all` → **`no tests ran`**. Só a invocação **sem argumento** funciona (é a que produz o 64 acima) |
 | 2026-09-25 | 6 | `catalog_server.py` local + `hpcshelf_client.py validate/plan` contra `--catalog-url http://127.0.0.1:18080` | **validate ✅ e plan ✅ offline**; `preflight` ❌ em `input_invalid` (falta mTLS) |
 | 2026-09-25 | 5 | `tests/test_fedavg_identity.py` | **8 passed** — identidade FedAvg ≡ SGD centralizado, gap `3e-8`; 4 controles negativos + meta-controle |
 | 2026-09-25 | 4 | `scripts/smoke_hpcshelf_images.sh` com os 6 checks de invariante de imagem | **16 passed, 0 failed** (10 antes) |
 | 2026-09-25 | 3 | decisão: variante 2 não perseguida; invariante fixado no nível contêiner | agrupamento passa a propriedade defendida |
-| 2026-09-25 | 3 | descritores da decomposição do modelo em `env/hpcshelf/model_split.py` no validador | 4 unidades num componente → `C017` ×3; 2 componentes → `C002` ×2; `comunicacao` sozinho → **válido** |
+| 2026-09-25 | 3 | descritores da decomposição do modelo em `env/hpcshelf/arms/grouped/model_split.py` no validador | 4 unidades num componente → `C017` ×3; 2 componentes → `C002` ×2; `comunicacao` sozinho → **válido** |
 | 2026-09-25 | 3 | `scripts/validate_hpcshelf.sh` | **28 passed, 0 failed** (25 antes) |
 | 2026-09-25 | 0-C | `python -m libs.federation_components` | modelo auto-consistente; **2 realizations, all conforming** |
 | 2026-09-25 | 0-C | `.venv/bin/python -m pytest tests/test_federation_components.py` | **16 passed**, um controle negativo por código (`M001`–`M003`, `M101`–`M106`) |
@@ -466,7 +548,7 @@ Itens já registrados como lacunas #3, #4 e #6 na integração.
 | 2026-09-25 | 2 | plano (`replica=1`) + `PYHEALTH_PARTITION_ID=0` conflitante | venceu o plano: `node-config='partition-id=1'` |
 | 2026-09-25 | 0 | `HPCSHELF_MODEL_ROOT=~/projetos/exp/hpc-shelf/hpcshelf-model scripts/validate_hpcshelf.sh` | 25 passed, 0 failed (baseline reconfirmado) |
 | 2026-09-25 | 0 | `git status` em `hpcshelf-model` (`develop` @ `68f0ace`) | **sujo**: `fl_unit/`, `catalog_data/components/federated-learning/`, `root-fl/`, `docs/FEDERATED_LEARNING_COMPONENT.md` não commitados |
-| 2026-09-25 | 0 | `grep UNIT_REPLICA_ID env/hpcshelf/images/supervise-hospital.sh` | linha 42 depende do patch não aplicado; `fl_unit/plan_identity.py` da plataforma não precisa dele |
+| 2026-09-25 | 0 | `grep UNIT_REPLICA_ID env/hpcshelf/arms/grouped/images/supervise-hospital.sh` | linha 42 depende do patch não aplicado; `fl_unit/plan_identity.py` da plataforma não precisa dele |
 
 ## Referências
 

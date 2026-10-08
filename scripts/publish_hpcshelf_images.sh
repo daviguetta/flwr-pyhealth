@@ -54,4 +54,4 @@ fi
 echo "platform:    $MODEL_ROOT"
 echo "interpreter: $PYTHON"
 
-exec "$PYTHON" env/hpcshelf/publish.py "$@"
+exec "$PYTHON" env/hpcshelf/arms/grouped/publish.py "$@"

@@ -1,0 +1,80 @@
+# Middle-level unit image for the three-level arm.
+#
+# This unit NESTS Podman: it hosts the communication component's unit (`link` or
+# `node`) as a Podman child, and calls that child's AppIO. That is why it is built
+# FROM the platform's podman-unit-base and not from the project's application
+# image — the base is the image that owns the nested runtime, and with the
+# project's Python floor at >=3.12 (2026-10-03) the application can be installed
+# into it.
+#
+# Two interpreters, as everywhere in this integration:
+#
+#   /opt/hpcshelf/venv      Python 3.12 + protobuf 7.x -> UnitAgent (from base)
+#   /opt/hpcshelf/app-venv  Python 3.12 + protobuf 6.x -> SuperExec + the app
+#
+# This is not a preference. Flower 1.34 declares `protobuf>=5.28.0,<7.0.0`, while
+# the platform's generated modules need gencode >= 7.35.1. The two are mutually
+# exclusive by declaration, so no single interpreter can hold both.
+#
+# Build (context is the repository root, so the app source is available):
+#
+#   podman build -f env/hpcshelf/arms/three-level/images/Containerfile.flower-exec \
+#     --build-arg SUPERVISOR=supervise-exec-server.sh \
+#     -t localhost/flower-exec-server:0.1.0 .
+#
+# Or use the three-level arm's build script, which builds both roles.
+#
+# See env/hpcshelf/arms/three-level/README.md.
+
+ARG BASE_IMAGE=localhost/podman-unit-base:local
+FROM ${BASE_IMAGE}
+
+# This unit hosts children, so the nested runtime is ON and podman is REAL. The
+# base already carries podman, uidmap, the cgroup preparation and
+# nested-podman-runtime.sh; the platform's entrypoint runs it before the
+# UnitAgent when this is true.
+ENV HPCSHELF_NESTED_RUNTIME_ENABLED=true \
+    HPCSHELF_PODMAN_RUNTIME=real
+
+# The application interpreter, kept apart from /opt/hpcshelf/venv for the
+# protobuf reason in the header.
+RUN /usr/bin/python3 -m venv /opt/hpcshelf/app-venv
+
+# The platform launches the application command with this working directory.
+WORKDIR /application
+COPY pyproject.toml ./
+COPY flower_app ./flower_app
+COPY libs ./libs
+
+# The same application stack as the grouped arm, pinned to the same versions as
+# `uv.lock`, so the three-level arm isolates the topology and nothing else.
+#
+# `flwr` without the simulation extra: this is the deployment runtime, not Ray.
+# It provides all three CLIs (flower-superlink, flower-supernode,
+# flower-superexec) from the one package.
+#
+# KNOWN GAP, shared with the grouped images: neither carries `dp-accounting`, so
+# the DP strategies import but the privacy budget (epsilon) cannot be reported.
+# Not fixed here on purpose — fixing it in one arm only would confound the
+# three-level arm. Registered in this arm's README.
+RUN /opt/hpcshelf/app-venv/bin/pip install --no-cache-dir --disable-pip-version-check \
+        "flwr==1.34.0" \
+        "numpy==2.2.6" \
+        "pyhealth==2.0.1" \
+        "torch==2.7.1" \
+    && /opt/hpcshelf/app-venv/bin/pip install --no-cache-dir --no-deps .
+
+COPY data ./data
+
+# One shared supervisor body plus a per-role wrapper. The role is a FILE, not a
+# build-arg-derived ENV: `ENV X=${ARG}` did not invalidate the build cache, and
+# both role images came out of the same layer with the same plugin type and the
+# same image ID. The wrapper makes the role impossible to share by accident.
+COPY env/hpcshelf/arms/three-level/images/supervise-exec.sh /opt/hpcshelf/
+ARG SUPERVISOR=supervise-exec-server.sh
+COPY env/hpcshelf/arms/three-level/images/${SUPERVISOR} /opt/hpcshelf/
+RUN chmod +x /opt/hpcshelf/supervise-exec.sh "/opt/hpcshelf/${SUPERVISOR}"
+
+# PID 1 stays the platform's entrypoint: nested runtime, then UnitAgent, which
+# launches this supervisor.
+CMD ["/opt/hpcshelf/entrypoint.sh"]

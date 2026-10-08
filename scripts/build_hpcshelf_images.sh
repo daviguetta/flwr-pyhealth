@@ -8,7 +8,7 @@
 #
 # Both are thin layers over this project's Flower application image, carrying
 # the HPC Shelf unit bootstrap (UnitAgent + entrypoint) copied from the
-# platform's base image. See env/hpcshelf/images/Containerfile.flower-unit for
+# platform's base image. See env/hpcshelf/arms/grouped/images/Containerfile.flower-unit for
 # why the layering is required rather than merely convenient.
 #
 # Prerequisites:
@@ -31,7 +31,7 @@ cd "$ROOT"
 APP_IMAGE="${HPC_APP_IMAGE:-localhost/pyhealth-flower-superexec:0.1.0}"
 UNIT_BASE="${HPC_UNIT_BASE:-localhost/podman-unit-base:local}"
 VERSION="${HPC_IMAGE_VERSION:-0.1.0}"
-CONTEXT="$ROOT/env/hpcshelf/images"
+CONTEXT="$ROOT/env/hpcshelf/arms/grouped/images"
 MODEL_ROOT="${HPCSHELF_MODEL_ROOT:-/tmp/hpcshelf-model}"
 
 if ! command -v podman >/dev/null 2>&1; then
@@ -85,4 +85,4 @@ for role in hub hospital; do
 done
 echo ""
 echo "These tags are local. Publishing to the HPC Shelf catalog is a separate,"
-echo "authorised step; see env/hpcshelf/images/README.md."
+echo "authorised step; see env/hpcshelf/arms/grouped/images/README.md."

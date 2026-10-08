@@ -1,4 +1,4 @@
-# `env/hpcshelf/images/` — the federation unit images
+# `env/hpcshelf/arms/grouped/images/` — the federation unit images
 
 The two OCI images the HPC Shelf platform pulls to materialise the federation's
 Podman units. Both are leaves: they host no nested components.
@@ -10,7 +10,7 @@ Podman units. Both are leaves: they host no nested components.
 
 Both are built by `Containerfile.flower-unit`, from the same base, differing only
 in the supervisor script they carry. See
-[`docs/HPC_SHELF_INTEGRATION.md`](../../../docs/HPC_SHELF_INTEGRATION.md)
+[`docs/HPC_SHELF_INTEGRATION.md`](../../../../docs/HPC_SHELF_INTEGRATION.md)
 section 4 for why a Flower process pair shares one container.
 
 ## Build
@@ -55,9 +55,11 @@ rebuilt from the platform's own pinned `requirements.txt` rather than copied,
 because a virtualenv is not relocatable across base images — the platform base's
 `venv/bin/python` points at `/usr/bin/python3.12`, which this image does not have.
 
-The images are also **not** built `FROM podman-unit-base`: that base has no
-Flower, PyHealth or Torch, and it runs Python 3.12 while this project requires
-`>=3.13`.
+The images are also **not** built `FROM podman-unit-base`, for two reasons: that
+base has no Flower, PyHealth or Torch; and the application's protobuf 6.x cannot
+share the interpreter the platform's UnitAgent needs. (The Python version is no
+longer one of them — the project's floor dropped to `>=3.12` on 2026-10-03, which
+is what makes `podman-unit-base` usable as the base for a **nesting** level.)
 
 ## Smoke test
 

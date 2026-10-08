@@ -390,7 +390,7 @@ Negativas / a mitigar:
 >
 > **Evidência (2026-09-25).** A decomposição do modelo foi escrita como
 > descritores e rodada no validador da própria plataforma
-> (`env/hpcshelf/model_split.py`; `scripts/validate_hpcshelf.sh` → 28 passed,
+> (`env/hpcshelf/arms/grouped/model_split.py`; `scripts/validate_hpcshelf.sh` → 28 passed,
 > 0 failed):
 >
 > | Variante | Co-localização | Dependência | Resultado |
@@ -422,11 +422,20 @@ estava errado e foi substituído pelo que a construção das imagens mostrou.
 
 1. **As imagens são construídas sobre a imagem de aplicação do projeto**, e
    não `FROM podman-unit-base`. Dois motivos independentes:
-   * a base da plataforma não tem Flower, PyHealth nem Torch, e roda Python
-     3.12 enquanto o projeto exige `>=3.13`;
-   * instalar tudo na base seria refazer um empilhamento pesado que já existe.
+   * a base da plataforma não tem Flower, PyHealth nem Torch, e instalá-los lá
+     seria refazer um empilhamento pesado que já existe;
+   * o venv da aplicação precisa de protobuf 6.x e o UnitAgent de 7.x (item 2),
+     então os dois nunca podem ser um só — o interpretador da base não serve
+     como interpretador da aplicação.
    O bootstrap da plataforma (`/opt/hpcshelf`) é copiado da base, então o código
 do UnitAgent continua sendo da plataforma.
+
+   > **Atualizado em 2026-10-03.** O piso do projeto desceu de `>=3.13` para
+   > `>=3.12`. A incompatibilidade de versão do Python **deixou de ser um
+   > motivo**; os dois acima permanecem. Consequência prática: `FROM
+   > podman-unit-base` volta a ser base viável para as imagens de **nível do
+   > meio**, que precisam aninhar Podman — é o caminho do braço “3 níveis” do
+   > comparativo (ver `docs/HPC_SHELF_ROADMAP.md`).
 
 2. **A imagem carrega dois interpretadores, e isso é obrigatório.**
    Os `*_pb2.py` da plataforma foram gerados com protobuf gencode **7.35.1**;
@@ -478,11 +487,11 @@ plataforma, sem infraestrutura e sem escrever no repositório dela.
 
 | Artefato | Caminho |
 | --- | --- |
-| Componente raiz | `env/hpcshelf/components/federation-root/0.1/component.yaml` |
-| Componente folha | `env/hpcshelf/components/flower-federation/0.1/component.yaml` |
-| Aplicação | `env/hpcshelf/applications/pyhealth-federation.yaml` |
+| Componente raiz | `env/hpcshelf/arms/grouped/components/federation-root/0.1/component.yaml` |
+| Componente folha | `env/hpcshelf/arms/grouped/components/flower-federation/0.1/component.yaml` |
+| Aplicação | `env/hpcshelf/arms/grouped/applications/pyhealth-federation.yaml` |
 | Inventário (sintético) | `env/hpcshelf/hosts.yaml` |
-| Verificador | `scripts/validate_hpcshelf.sh` → `env/hpcshelf/validate.py` |
+| Verificador | `scripts/validate_hpcshelf.sh` → `env/hpcshelf/arms/grouped/validate.py` |
 
 ### Resultado (25 verificações, 0 falhas)
 
@@ -529,11 +538,11 @@ As duas imagens de unidade existem e funcionam.
 
 | Artefato | Caminho |
 | --- | --- |
-| Containerfile (uma receita, dois papéis) | `env/hpcshelf/images/Containerfile.flower-unit` |
-| Supervisores | `env/hpcshelf/images/supervise-hub.sh`, `supervise-hospital.sh` |
+| Containerfile (uma receita, dois papéis) | `env/hpcshelf/arms/grouped/images/Containerfile.flower-unit` |
+| Supervisores | `env/hpcshelf/arms/grouped/images/supervise-hub.sh`, `supervise-hospital.sh` |
 | Build | `scripts/build_hpcshelf_images.sh` |
 | Teste funcional | `scripts/smoke_hpcshelf_images.sh` |
-| Notas de build e publicação | `env/hpcshelf/images/README.md` |
+| Notas de build e publicação | `env/hpcshelf/arms/grouped/images/README.md` |
 
 ### Resultado
 
@@ -559,8 +568,9 @@ hospital sem identidade de partição **recusa-se a iniciar** com código 1.
 2. **Virtualenv não é relocável.** O `venv/bin/python` da base aponta para
    `/usr/bin/python3.12`, ausente na imagem final — o venv do UnitAgent precisa
    ser recriado, não copiado.
-3. **A base da plataforma não serve de base.** Não tem Flower/PyHealth/Torch e
-   roda Python 3.12 contra um `requires-python >= 3.13`.
+3. **A base da plataforma não tem a carga.** Não traz Flower, PyHealth nem
+   Torch. (A incompatibilidade de versão do Python que constava aqui foi
+   resolvida: o piso do projeto desceu para `>=3.12` em 2026-10-03.)
 
 ### Publicação — não executada
 
@@ -574,7 +584,7 @@ três coisas que este repositório não decide sozinho:
   catálogo da plataforma — sem eles o componente `federation-root` não fecha.
 
 O formato do `artifact.json` e os `descriptor_digest` já calculados estão em
-`env/hpcshelf/images/README.md`.
+`env/hpcshelf/arms/grouped/images/README.md`.
 
 ### Itens abertos registrados
 
@@ -593,9 +603,9 @@ verifica com o código da própria plataforma.
 
 | Artefato | Caminho |
 | --- | --- |
-| Publicador | `env/hpcshelf/publish.py` → `scripts/publish_hpcshelf_images.sh` |
+| Publicador | `env/hpcshelf/arms/grouped/publish.py` → `scripts/publish_hpcshelf_images.sh` |
 | Árvore de catálogo gerada | `build/hpcshelf-catalog/components/<nome>/<versão>/{component.yaml,artifact.json}` |
-| Notas e procedimento | `env/hpcshelf/images/README.md` |
+| Notas e procedimento | `env/hpcshelf/arms/grouped/images/README.md` |
 
 ### Resultado do ensaio (18 verificações, 0 falhas)
 
@@ -646,7 +656,7 @@ plataforma mudar essa base, é o artefato de origem que muda.
    **Concluído:** o supervisor lê `plan.replica` de `HPCSHELF_UNIT_PLAN`, que a
    plataforma já injeta para toda unidade. Nenhum patch é necessário — ver
    `docs/HPC_SHELF_ROADMAP.md` Fase 2 e
-   `env/hpcshelf/images/supervise-hospital.sh`.
+   `env/hpcshelf/arms/grouped/images/supervise-hospital.sh`.
 2. Enviar ao registry da plataforma e ativar o catálogo, quando houver
    autorização, credenciais e o caminho de projeto confirmado.
 3. Submeter um run completo (`flwr run` contra o Control API 9093 do hub, que a

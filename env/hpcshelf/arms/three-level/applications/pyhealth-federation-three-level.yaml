@@ -1,0 +1,35 @@
+# Three-level arm: 1 exec-server + 2 exec-clients, one physical host each.
+#
+# `placement` may reference root units only (D004 / NON_ROOT_UNIT_PLACEMENT),
+# which is why only `institution` appears here. Hosts come from the shared
+# inventory `env/hpcshelf/hosts.yaml` — the same one the grouped arm's
+# application uses, so the two arms differ in topology and nothing else.
+#
+# Resulting shape after planning (9 units, 3 physical hosts):
+#
+#   host-hub  institution[0] -> exec-server[0] -> link[0]
+#   host-a    institution[1] -> exec-client[0] -> node[0]
+#   host-b    institution[2] -> exec-client[1] -> node[1]
+apiVersion: hpcshelf.org/v1
+kind: Application
+
+metadata:
+  name: pyhealth-federation-three-level
+
+spec:
+  component:
+    ref: "three-level-root:0.1"
+
+  units:
+    institution:
+      replicas: 3
+
+  placement:
+    institution:
+      instances:
+        - replica: 0
+          host: host-hub
+        - replica: 1
+          host: host-a
+        - replica: 2
+          host: host-b

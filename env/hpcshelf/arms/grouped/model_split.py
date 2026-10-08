@@ -14,7 +14,7 @@ two platform rules pull in opposite directions:
   two units that must talk cannot live in separate ones.
 
 These descriptor sets put the model's decomposition on the platform and let the
-validator answer for itself. ``env/hpcshelf/validate.py`` asserts the codes the
+validator answer for itself. ``env/hpcshelf/arms/grouped/validate.py`` asserts the codes the
 collision predicts, which turns "the platform will not allow it" from an argument
 into a reproducible result.
 

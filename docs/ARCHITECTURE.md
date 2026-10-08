@@ -128,8 +128,47 @@ Shelf a dependência horizontal só resolve dentro do mesmo componente e cada
 réplica de host comporta uma única réplica interna. O agrupamento é uma
 **realização**, não o modelo: as duas grafias reduzem ao mesmo modelo, e é isso
 que `libs/federation_components` verifica. Separar em quatro unidades é a opção B
-de `HPC_SHELF_INTEGRATION.md` seção 4, ainda condicionada a uma evolução da
-plataforma — e agora justificável com um modelo formal em vez de um argumento.
+de `HPC_SHELF_INTEGRATION.md` seção 4 — agora **construída e medida**, não só
+argumentada (abaixo); o que falta na plataforma é `scope: parent`, que a tornaria
+segura, não possível.
+
+**A realização separada existe e é medida.** `env/hpcshelf/arms/three-level/`
+materializa a opção B como descritores, 4 imagens de unidade e dois provadores:
+9 unidades em 3 níveis, com `appio` publicado em `10.201.0.{1,2,3}:30000` — medido
+pelo **mesmo** `EndpointPublisher` que mede o braço agrupado, onde o resultado é
+`0`. A ligação vertical **não** é declarável (`dependencies` no pai → `C002`) e é
+realizada lendo o plano do próprio pai (`UnitPlan.children[].services[]` +
+`127.0.0.1:<published_port>`); `scripts/smoke_hpcshelf_three_level.sh` exercita
+isso e o caso negativo.
+
+```mermaid
+graph TB
+    subgraph HUB["host-hub"]
+        I0["institution[0] · Incus"] --> ES["exec-server[0]<br/>SuperExec → ServerApp"]
+        ES --> L["link[0] · SuperLink<br/>appio 9091 · fleet 9092"]
+    end
+    subgraph HA["host-a"]
+        I1["institution[1] · Incus"] --> EC0["exec-client[0]<br/>SuperExec → ClientApp · partition 0"]
+        EC0 --> N0["node[0] · SuperNode · appio 9094"]
+    end
+    subgraph HB["host-b"]
+        I2["institution[2] · Incus"] --> EC1["exec-client[1]<br/>SuperExec → ClientApp · partition 1"]
+        EC1 --> N1["node[1] · SuperNode · appio 9094"]
+    end
+    ES -.->|"appio (namespace do pai)"| L
+    EC0 -.->|"appio (namespace do pai)"| N0
+    EC1 -.->|"appio (namespace do pai)"| N1
+    N0 ==>|"fleet 9092 · VPN"| L
+    N1 ==>|"fleet 9092 · VPN"| L
+```
+
+`M103` continua acusando essa realização, e por isso ela **não** é registrada em
+`libs/federation_components`: um verificador com exceção para o caso que ele
+existe para pegar seria mais fraco. O desempate continua sendo `scope: parent`.
+O que a separação **compra**, e que é verificável no artefato: as unidades de
+transporte (`flower-link`, `flower-node`) não contêm `data/`, `flower_app`, torch
+nem PyHealth — 1,1 GB contra 7,3 GB —, de modo que quem carrega parâmetros não
+consegue ler prontuário.
 
 **Fronteira de dados.** A única unidade que lê prontuário é `exec-client`; o
 `node` ao lado é um carteiro cego. O modelo registra isso (`touches_data`) e o

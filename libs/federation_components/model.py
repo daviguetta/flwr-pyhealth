@@ -209,8 +209,8 @@ class Realization:
 #: dependency only inside one component and admits one inner replica per host
 #: replica. See docs/HPC_SHELF_INTEGRATION.md section 4.
 REALIZATION_PROJECT = Realization(
-    artifact="env/hpcshelf (project descriptors)",
-    descriptors="env/hpcshelf/components/flower-federation/0.1/component.yaml",
+    artifact="env/hpcshelf/arms/grouped (project descriptors)",
+    descriptors="env/hpcshelf/arms/grouped/components/flower-federation/0.1/component.yaml",
     units=(
         PhysicalUnit("hub", realizes=(LINK, EXEC_SERVER)),
         PhysicalUnit("hospital", realizes=(NODE, EXEC_CLIENT), data_boundary=True),

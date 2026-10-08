@@ -30,3 +30,8 @@ docs/
 scripts/
 tests/
 env/
+
+# Exception: the three-arm comparison's unit images copy their supervisor from
+# here, so this subtree must stay in the context. Everything else under env/ is
+# still excluded.
+!env/hpcshelf/arms/three-level/images/

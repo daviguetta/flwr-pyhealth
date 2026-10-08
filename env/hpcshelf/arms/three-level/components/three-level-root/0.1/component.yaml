@@ -1,0 +1,61 @@
+# Root component of the three-level arm.
+#
+# One Incus unit per participating host is the data boundary (records are read
+# inside it and never mounted out); the `exec` component is nested one level
+# below, and `comunicacao` two. The chain the platform materialises is:
+#
+#   institution[i]        Incus      (one per host)
+#     └── exec-*[j]       Podman     (SuperExec: the app and its data)
+#           └── link/node Podman     (SuperLink / SuperNode: transport only)
+#
+# Occupancy is collision-free under C017: `exec-server[0]` and `exec-client[i]`
+# occupy distinct host replicas, and the deeper `comm` composition is scoped
+# separately (its host units are `exec-*`, not `institution`).
+#
+# `institution[0]` is the server (exec-server + link). Every other replica is a
+# hospital (exec-client + node).
+apiVersion: hpcshelf.org/v1
+kind: Component
+
+metadata:
+  name: three-level-root
+  version: "0.1"
+
+spec:
+  units:
+    institution:
+      image: hpcshelf-unit-base
+      replicas:
+        min: 1
+        max: 8
+        default: 3
+
+  nestedComponents:
+    ex:
+      component:
+        ref: "exec:0.1"
+
+      units:
+        exec-server:
+          replicas: 1
+        exec-client:
+          replicas: 2
+
+      overlap:
+        exec-server:
+          hostUnit: institution
+          mapping:
+            type: explicit
+            instances:
+              - innerReplica: 0
+                hostReplica: 0
+
+        exec-client:
+          hostUnit: institution
+          mapping:
+            type: explicit
+            instances:
+              - innerReplica: 0
+                hostReplica: 1
+              - innerReplica: 1
+                hostReplica: 2
