@@ -50,7 +50,7 @@ Detalhamento honesto do que não está pronto: [Limitações](#limitações).
 ## Início rápido
 
 ```bash
-# 1. Ambiente (uma vez). Requer Python 3.13 e uv.
+# 1. Ambiente (uma vez). Requer Python 3.12 e uv.
 uv sync
 
 # 2. Federação simulada, com 2 nós e 2 rodadas
