@@ -5,8 +5,8 @@
 | | |
 | --- | --- |
 | Status | Fases 0, 1, 2 e o caminho de publicação concluídos; **nada publicado no catálogo da plataforma nem implantado** |
-| Prova de desenho | `scripts/validate_hpcshelf.sh` — 25 verificações, 0 falhas |
-| Prova funcional | `scripts/smoke_hpcshelf_images.sh` — 8 verificações, 0 falhas |
+| Prova de desenho | `scripts/validate_hpcshelf.sh` — 28 verificações, 0 falhas |
+| Prova funcional | `scripts/smoke_hpcshelf_images.sh` — 16 verificações, 0 falhas |
 | Ensaio de publicação | `scripts/publish_hpcshelf_images.sh` — 18 verificações, 0 falhas |
 | Base de referência | `hpcshelf-model`, branch `develop`, commit `68f0ace62160191f082ee783601c48b9fb3f85f1` |
 | Escopo do documento | Camada de federação (o workload Flower+PyHealth) |
@@ -60,8 +60,11 @@ Levantadas lendo o código da plataforma. São elas que decidem a decomposição
 
 ## 3. Decomposição congelada
 
-A forma executável desta decomposição está em `env/hpcshelf/` — descritores,
-inventário de hosts e o harness que roda o validador e o planner da plataforma.
+A forma executável desta decomposição está em `env/hpcshelf/arms/grouped/` —
+descritores, imagens e o harness que roda o validador e o planner da plataforma.
+O inventário de hosts é compartilhado em `env/hpcshelf/hosts.yaml`, e a
+realização alternativa — um processo Flower por unidade, em três níveis — vive
+em `env/hpcshelf/arms/three-level/` (ver seção 4.5).
 
 Duas camadas, sem intermediário (R2 permite):
 
@@ -265,8 +268,8 @@ institution[2] (Incus, host-b)    └── hospital[1] (Podman) = SuperNode[1] 
 | Imagem | Base | Conteúdo | Roda em |
 | --- | --- | --- | --- |
 | `hpcshelf-unit-base` | — (da plataforma) | UnitAgent + runtime Podman aninhado | unidade raiz Incus |
-| `flower-hub:0.1.0` | `podman-unit-base` | `flwr/superlink` + SuperExec ServerApp + `flower_app/` | `hub` |
-| `flower-hospital:0.1.0` | `podman-unit-base` | `flwr/supernode` + SuperExec ClientApp + `flower_app/` + dados | `hospital[*]` |
+| `flower-hub:0.1.0` | app image (`pyhealth-flower-superexec`) + bootstrap do `podman-unit-base` | `flwr/superlink` + SuperExec ServerApp + `flower_app/` | `hub` |
+| `flower-hospital:0.1.0` | idem | `flwr/supernode` + SuperExec ClientApp + `flower_app/` + dados | `hospital[*]` |
 
 O que cruza a fronteira da unidade, exaustivamente: `ArrayRecord` (pesos) e
 `MetricRecord` (escalares) dentro do protocolo do Flower sobre `9092`. O que
@@ -330,9 +333,12 @@ dependência entre componentes (ou declarar a fiação no componente raiz).
 - ✗ Bloqueia as fases seguintes até a mudança existir.
 
 **C. Intermediário Podman-in-Podman (espelhar o exemplo literalmente).**
-Não resolve: o intermediário apenas adiciona um nível de aninhamento. Como ele
-também é uma unidade por réplica de host, continuaria hospedando **uma** unidade
-filha por réplica — o mesmo limite de R6, com mais overhead. Rejeitada.
+Na época rejeitada como "não resolve"; a conclusão era imprecisa. O aninhamento
+transitivo (Incus → `exec-*` → `link`/`node`) **é** expressável e foi depois
+construído e validado como o braço "3 níveis" (`env/hpcshelf/arms/three-level/`,
+39/39). O custo real dessa separação não é "não resolve", é que ela **publica o
+`appio` na VPN** — a plataforma não tem `scope: parent` no `ServiceDefinition`.
+Ver seção 4.5.
 
 **D. Relaxar C017** (permitir N réplicas internas por réplica de host na mesma
 composição). Rejeitada: é um invariante validado da plataforma, e `AGENTS.md` do
@@ -408,8 +414,15 @@ Negativas / a mitigar:
 > optou por manter o agrupamento, porque é ele que mantém `appio` em loopback
 > dentro do contêiner — separar deixaria `appio` dentro da instituição, mas o
 > poria na rede. A proposta fica registrada pelo raciocínio e para uso de quem
-> tiver carga multi-processo que justifique o custo. O pedido ao orientador
-> voltou a ser apenas as três confirmações de publicação.
+> tiver carga multi-processo que justifique o custo.
+>
+> **Revisitado em 2026-10-03 (Fase 3 reaberta).** A separação saiu do papel:
+> `env/hpcshelf/arms/three-level/` materializa o "um processo por unidade" em
+> três níveis, validado **39/39** e smoke-testado **22/22**. O custo medido é
+> exatamente o previsto — `appio` publicado na VPN — e a capacidade que o
+> zeraria é `scope: parent` no `ServiceDefinition`, cuja decisão passou a ser o
+> pedido da Parte 3 em `docs/HPC_SHELF_ORIENTADOR_REQUEST.md`. O agrupado segue
+> como default até lá.
 >
 > **Impacto:** aditivo. Não altera nenhum invariante existente e não afeta os
 > cenários já validados. Habilitaria o padrão "um container por processo" para
@@ -434,8 +447,8 @@ do UnitAgent continua sendo da plataforma.
    > `>=3.12`. A incompatibilidade de versão do Python **deixou de ser um
    > motivo**; os dois acima permanecem. Consequência prática: `FROM
    > podman-unit-base` volta a ser base viável para as imagens de **nível do
-   > meio**, que precisam aninhar Podman — é o caminho do braço “3 níveis” do
-   > comparativo (ver `docs/HPC_SHELF_ROADMAP.md`).
+   > meio**, que precisam aninhar Podman — é o caminho do braço “3 níveis”
+   > (`env/hpcshelf/arms/three-level/`; ver `docs/HPC_SHELF_ROADMAP.md`).
 
 2. **A imagem carrega dois interpretadores, e isso é obrigatório.**
    Os `*_pb2.py` da plataforma foram gerados com protobuf gencode **7.35.1**;
@@ -493,7 +506,7 @@ plataforma, sem infraestrutura e sem escrever no repositório dela.
 | Inventário (sintético) | `env/hpcshelf/hosts.yaml` |
 | Verificador | `scripts/validate_hpcshelf.sh` → `env/hpcshelf/arms/grouped/validate.py` |
 
-### Resultado (25 verificações, 0 falhas)
+### Resultado (28 verificações, 0 falhas)
 
 **Prova positiva.** `validate_component` e `validate_application` sem erros, e
 nenhuma ocorrência de `C017`, `C007`, `D004`, `D007` ou `C002`.
@@ -553,7 +566,7 @@ localhost/flower-hub:0.1.0       sha256:d8900cb086812b898ee3be212b42474591bfb93c
 localhost/flower-hospital:0.1.0  sha256:d49ec35bfc21e12c446c817c5b7b14f0ccfa6a8b07ef4d040010d05c4f061230
 ```
 
-**Teste funcional: 8 verificações, 0 falhas.** O hub sobe com o Fleet em
+**Teste funcional: 16 verificações, 0 falhas.** O hub sobe com o Fleet em
 `0.0.0.0:9092` e o Runtime API em `127.0.0.1:9091` (loopback, nunca roteável);
 dois hospitais registram como nós distintos
 (`[Fleet.ActivateNode] node_id=…`), cada um com o seu `partition-id`; e um
