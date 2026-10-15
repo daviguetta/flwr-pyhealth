@@ -240,6 +240,25 @@ Como no braço 1, publicar no registry de ensaio **reescreve o descritor**
 (retarget para `localhost:5000`) e muda o `descriptor_digest`; o script avisa em
 voz alta. Os digests acima são **do ensaio**, não do catálogo de produção.
 
+### Contagem de hosts do braço 2 (2026-10-15)
+
+Pergunta de custo para o GCP: o braço precisa de 3 hosts, ou duas instituições
+cabem numa máquina? O planner da plataforma foi rodado sobre o catálogo
+publicado, offline:
+
+| Configuração | Resultado |
+| --- | :---: |
+| 3 hosts, uma instituição cada | **aceito** — 9 unidades, 3 hosts distintos |
+| 2 hosts, `institution[1]` e `institution[2]` no mesmo host | **aceito** — 9 unidades, 2 hosts distintos |
+
+`C017` **não** dispara na segunda linha: cada `institution` é uma raiz separada,
+com composição aninhada própria, então os escopos de ocupação são independentes.
+A separação em 3 hosts **não é exigência da plataforma** — é exigência do braço:
+com 2 hosts, as duas `exec-client`, as únicas unidades que leem prontuário, ficam
+na mesma máquina física, e a contenção de dano que justifica a separação deixa de
+valer. Decisão proposta e o resto do plano em
+[`HPC_SHELF_GCP_PLAN.md`](HPC_SHELF_GCP_PLAN.md) §5.
+
 ## O que a prova NÃO estabelece
 
 - **Não prova que isso implanta.** O inventário de hosts é sintético e nada foi
@@ -256,6 +275,7 @@ Comando e saída, não opinião.
 | Data | Fase | Evidência | Resultado |
 | --- | --- | --- | --- |
 | 2026-10-15 | 2 (braço 2) | `env/hpcshelf/arms/three-level/publish.py` + `scripts/publish_hpcshelf_three_level.sh` | **31/31** — 4 imagens publicadas com digest do registry; **3** `artifact.json`; `FilesystemCatalog` aceita os 3; plano 3 Incus + 6 Podman usando exatamente as 4 imagens; raiz reusa `hpcshelf-unit-base` por digest |
+| 2026-10-15 | — | planner sobre o catálogo publicado, com 2 inventários | **ambos aceitos** — 3 hosts e 2 hosts dão 9 unidades; `C017` não dispara com duas instituições no mesmo host |
 | 2026-10-05 | 3 (reaberta) | `env/hpcshelf/arms/three-level/`: 3 descritores + aplicação + `validate.py` | **39/39** — 9 unidades em 3 níveis; `fleet` injetado; `appio` publicado em `10.201.0.{1,2,3}:30000`; **C002** no controle negativo da ligação vertical declarada; **D012**/**C017** ainda policiam o `overlap` |
 | 2026-10-05 | 4 (braço 2) | `Containerfile.flower-comm` + `supervise-{comm,link,node}.sh`; build com guarda de papéis | **9/9** — transporte sem corpus/torch/pyhealth/`data/`, 4 camadas distintas, 1 papel por imagem; `flower-link`/`flower-node` em **1,1 GB** contra **7,3 GB** do `exec` |
 | 2026-10-05 | 5 (braço 2) | `scripts/smoke_hpcshelf_three_level.sh` | **22/22** — `appio` em `0.0.0.0` (não loopback); 2 nodes registram no `link` com partição própria; node recusa sem `SUPERLINK_HOST` e sem identidade; pai lê a porta do filho do próprio plano e falha rápido sem filho |

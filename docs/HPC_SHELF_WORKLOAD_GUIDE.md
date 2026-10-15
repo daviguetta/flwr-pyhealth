@@ -13,6 +13,7 @@ mexo?") e pare. O resto fica aqui para quando precisar.
 | **Este documento** | Onde cada coisa vive e **como executar** |
 | **Decisões** | [`HPC_SHELF_DECISIONS.md`](HPC_SHELF_DECISIONS.md) — limitações e o porquê |
 | **Resultados** | [`HPC_SHELF_RESULTS.md`](HPC_SHELF_RESULTS.md) — números e evidências |
+| **Plano no GCP** | [`HPC_SHELF_GCP_PLAN.md`](HPC_SHELF_GCP_PLAN.md) — o que provisionar e em que ordem |
 
 ---
 
@@ -199,5 +200,7 @@ De `COMMIT_POLICY.md`, as que valem para trabalho de arquitetura:
 - [`HPC_SHELF_RESULTS.md`](HPC_SHELF_RESULTS.md) — números e evidências.
 - [`HPC_SHELF_ORIENTADOR_REQUEST.md`](HPC_SHELF_ORIENTADOR_REQUEST.md) — o que
   falta para publicar.
+- [`HPC_SHELF_GCP_PLAN.md`](HPC_SHELF_GCP_PLAN.md) — execução do braço 2 em VMs
+  no GCP: requisitos, ordem, custo e as rotas para o round.
 - `env/hpcshelf/README.md` — artefatos dos dois braços.
 - `env/incus/PORTS.md` — inventário de serviços e portas.

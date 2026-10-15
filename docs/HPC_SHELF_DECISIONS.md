@@ -382,6 +382,7 @@ unidade, ε declarado no manifesto quando `dp-mode != none`. Bloqueada pela Fase
 
 - [`HPC_SHELF_RESULTS.md`](HPC_SHELF_RESULTS.md) — números e evidências.
 - [`HPC_SHELF_WORKLOAD_GUIDE.md`](HPC_SHELF_WORKLOAD_GUIDE.md) — como executar.
+- [`HPC_SHELF_GCP_PLAN.md`](HPC_SHELF_GCP_PLAN.md) — execução do braço 2 no GCP.
 - [`HPC_SHELF_ORIENTADOR_REQUEST.md`](HPC_SHELF_ORIENTADOR_REQUEST.md) — o pedido.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — topologia da camada de federação.
 - `hpcshelf-model` — `AGENTS.md` (invariantes), `deployment_planner.py`,
