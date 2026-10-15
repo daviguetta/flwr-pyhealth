@@ -148,6 +148,7 @@ env/hpcshelf/arms/three-level/
 │   ├── Containerfile.flower-comm             # leaf level (transport only)
 │   ├── supervise-comm.sh                     # SuperLink / SuperNode
 │   └── supervise-link.sh, supervise-node.sh  # role wrappers
+├── publish.py                                # per-component publication -> 3 artifact.json
 ├── validate.py                               # platform validator + planner + measurement
 └── README.md
 ```
@@ -163,6 +164,8 @@ scripts/build_hpcshelf_three_level.sh                            # 4 images + ro
 HPCSHELF_MODEL_ROOT=~/projetos/exp/hpc-shelf/hpcshelf-model \
     scripts/validate_hpcshelf_three_level.sh                      # 39 checks
 scripts/smoke_hpcshelf_three_level.sh                             # 22 checks
+scripts/publish_hpcshelf_three_level.sh \
+    --registry localhost:5000 --insecure                          # 31 checks (rehearsal)
 ```
 
 | Proof | What it establishes | Result |
@@ -170,6 +173,7 @@ scripts/smoke_hpcshelf_three_level.sh                             # 22 checks
 | build + role guard | four distinct images, each carrying exactly one role | 9/9 |
 | `validate.py` | the platform accepts the three descriptors; the plan has 3 levels, 9 units; `fleet` is injected; **`appio` is on the VPN**; C002 rejects the declarable version of the vertical binding; D012/C017 still police the mapping; a single-host federation is refused | 39/39 |
 | `smoke_hpcshelf_three_level.sh` | the transport image has no corpus and no ML stack; `appio` binds `0.0.0.0` on both units; two nodes reach a `link` and register with their own partition ids; a node fails without the injected SuperLink and without a partition identity; the exec supervisor reads its child's port from its own plan and fails fast when there is none | 22/22 |
+| `publish.py` | the unit -> repository map is per component and is checked against the descriptors before anything is pushed; four images are published with registry-reported digests; **three** `artifact.json` are written, one per component; `FilesystemCatalog` accepts all three and pins five units; the plan has 3 Incus + 6 Podman units, and all six descendents resolve exactly the four pushed images | 31/31 |
 
 The same three commands against the grouped arm are
 `scripts/build_hpcshelf_images.sh`, `scripts/validate_hpcshelf.sh` and
@@ -221,6 +225,7 @@ boundary" from "reachable beyond its parent".
 | --- | --- | --- |
 | `scope: parent` for a service | platform | the capability that would make this arm free. Absent from `ServiceDefinition`; `docs/HPC_SHELF_ORIENTADOR_REQUEST.md` is where the ask lives |
 | Container submission | both arms | the Control API (9093) is not published, so `flwr run` has no entry point yet (Phase 6) |
-| Real deployment | both arms | no Incus, no mTLS material, no catalog publication: the descriptors are planned and validated, never deployed |
+| Catalog publication | this arm | the path exists and is rehearsed (`scripts/publish_hpcshelf_three_level.sh`, **31/31**); nothing has been pushed to the platform's registry. Needs the confirmations in `docs/HPC_SHELF_ORIENTADOR_REQUEST.md` |
+| Real deployment | both arms | no Incus, no mTLS material: the descriptors are planned and validated against the published catalog, never deployed |
 | `--insecure` | both arms | every supervisor runs Flower in cleartext; the VPN is the only confidentiality argument so far |
 | 3rd arm (`scope: parent`) | this directory | the comparison is two arms until the platform capability exists; the third is the one that would settle Phase 3 |

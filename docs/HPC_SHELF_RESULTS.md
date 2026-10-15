@@ -21,6 +21,7 @@ manter para não regredir.
 | Braço 2 — descritores + plano + custo | **39/39** | `scripts/validate_hpcshelf_three_level.sh` |
 | Braço 2 — unidades, sem plataforma | **22/22** | `scripts/smoke_hpcshelf_three_level.sh` |
 | Braço 2 — build + guarda de papéis | **9/9** | `scripts/build_hpcshelf_three_level.sh` |
+| Braço 2 — publicação ensaiada | **31/31** | `scripts/publish_hpcshelf_three_level.sh --registry localhost:5000 --insecure` |
 
 > **Ressalva do `test.sh`.** O script não remove `${1}`, então o pytest recebe a
 > seleção como caminho: `test.sh fast`, `test.sh slow` e `test.sh all` resultam
@@ -203,6 +204,42 @@ não é reescrito, e o digest é o registrado no repositório:
 flower-federation:0.1    sha256:2f7772db5a9b236dfa3d6cd707e2929f38db7ae6f091f961d70b1e7837e96d93
 ```
 
+### Publicação — braço 2 (3 níveis) ensaiado (2026-10-15)
+
+O braço 2 ganhou o seu próprio publicador, e ele **não** é uma cópia do braço 1.
+As quatro unidades deste braço vivem em **dois** componentes, então o mapa
+unidade → repositório é **por componente**. O `ROLES` global do braço 1 daria
+`KeyError` aqui: `link` não existe em `exec`, e `exec-server` não existe em
+`comunicacao`. O publicador tem um guarda que compara esse mapa com os
+descritores **antes** de qualquer push.
+
+`scripts/publish_hpcshelf_three_level.sh --registry localhost:5000 --insecure`
+→ **31 verificações, 0 falhas**, contra o mesmo registry local (`registry:2` em
+`127.0.0.1:5000`) usado pelo braço 1:
+
+- as quatro imagens foram publicadas, com o digest conferido de forma
+  independente via `HEAD /v2/…/manifests/…`;
+- **três** `artifact.json` foram escritos, um por componente:
+
+  ```text
+  comunicacao:0.1        sha256:a793b4b40870fc966d0db7d61e0bf0303319006a8154b95f409cf0b1f6187aa5
+  exec:0.1               sha256:be3ebea3f6b99950041a0f95ccccdfea7464aba6ddc9dcdcb2d604c8299062fc
+  three-level-root:0.1   sha256:b2224a06e05aef5bd8c17d68a503865fcfb575c0c05c341df4e18004ec016316
+  ```
+
+- o `FilesystemCatalog` da plataforma leu os três, aceitou a integridade,
+  confirmou cada `descriptor_digest` e fixou **todas as cinco** unidades de
+  imagem por digest;
+- o `DeploymentPlanner` planejou a partir do catálogo publicado: **3 Incus + 6
+  Podman**, com os 6 descendentes resolvendo exatamente as 4 imagens empurradas —
+  a asserção que separa este braço do braço 1;
+- o componente raiz **reusa** `hpcshelf-unit-base` por digest exato, incluindo o
+  arquivo Incus de 501 MB — nada foi reconstruído.
+
+Como no braço 1, publicar no registry de ensaio **reescreve o descritor**
+(retarget para `localhost:5000`) e muda o `descriptor_digest`; o script avisa em
+voz alta. Os digests acima são **do ensaio**, não do catálogo de produção.
+
 ## O que a prova NÃO estabelece
 
 - **Não prova que isso implanta.** O inventário de hosts é sintético e nada foi
@@ -218,6 +255,7 @@ Comando e saída, não opinião.
 
 | Data | Fase | Evidência | Resultado |
 | --- | --- | --- | --- |
+| 2026-10-15 | 2 (braço 2) | `env/hpcshelf/arms/three-level/publish.py` + `scripts/publish_hpcshelf_three_level.sh` | **31/31** — 4 imagens publicadas com digest do registry; **3** `artifact.json`; `FilesystemCatalog` aceita os 3; plano 3 Incus + 6 Podman usando exatamente as 4 imagens; raiz reusa `hpcshelf-unit-base` por digest |
 | 2026-10-05 | 3 (reaberta) | `env/hpcshelf/arms/three-level/`: 3 descritores + aplicação + `validate.py` | **39/39** — 9 unidades em 3 níveis; `fleet` injetado; `appio` publicado em `10.201.0.{1,2,3}:30000`; **C002** no controle negativo da ligação vertical declarada; **D012**/**C017** ainda policiam o `overlap` |
 | 2026-10-05 | 4 (braço 2) | `Containerfile.flower-comm` + `supervise-{comm,link,node}.sh`; build com guarda de papéis | **9/9** — transporte sem corpus/torch/pyhealth/`data/`, 4 camadas distintas, 1 papel por imagem; `flower-link`/`flower-node` em **1,1 GB** contra **7,3 GB** do `exec` |
 | 2026-10-05 | 5 (braço 2) | `scripts/smoke_hpcshelf_three_level.sh` | **22/22** — `appio` em `0.0.0.0` (não loopback); 2 nodes registram no `link` com partição própria; node recusa sem `SUPERLINK_HOST` e sem identidade; pai lê a porta do filho do próprio plano e falha rápido sem filho |
