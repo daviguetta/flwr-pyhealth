@@ -170,6 +170,8 @@ Regras completas e o procedimento de auditoria:
 
 | Documento | Conteúdo |
 | --- | --- |
+| [`docs/FLOWER.md`](docs/FLOWER.md) | Flower para quem não o conhece: workflow, camada de runtime e onde a plataforma entra |
+| [`docs/FLOWER_REFERENCIA.md`](docs/FLOWER_REFERENCIA.md) | Versão longa: implementação do runtime, braços plano × 3 níveis, checklist de erros conceituais |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Topologia, round federado, fronteira de dados, decisões e justificativas |
 | [`docs/SIMULATION.md`](docs/SIMULATION.md) | Simulação Ray: comandos, escala, cluster multi-nó, armadilhas |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Deployment em contêineres: topologia, portas, TLS, diagnóstico |
