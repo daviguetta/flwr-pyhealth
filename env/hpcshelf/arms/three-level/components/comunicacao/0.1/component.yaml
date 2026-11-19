@@ -29,7 +29,7 @@ metadata:
 spec:
   units:
     link:
-      image: catalog.hpcshelf.org/pyhealth/flower-link:0.1.0
+      image: catalog.hpcshelf.org/pyhealth-federation-three-level/flower-link:0.1.0
 
       replicas:
         min: 1
@@ -44,7 +44,7 @@ spec:
         # The Runtime API the SuperExec in the parent unit dials. The owning unit
         # is told its own container port; the parent derives the address from its
         # own unit plan.
-        appio:
+        appio:  
           protocol: grpc
           containerPort: 9091
           environment:
@@ -57,8 +57,14 @@ spec:
           environment:
             port: FL_FLEET_PORT
 
+        control:
+          protocol: grpc
+          containerPort: 9093
+          environment:
+            port: FL_CONTROL_PORT
+
     node:
-      image: catalog.hpcshelf.org/pyhealth/flower-node:0.1.0
+      image: catalog.hpcshelf.org/pyhealth-federation-three-level/flower-node:0.1.0
 
       replicas:
         min: 1
@@ -87,5 +93,5 @@ spec:
             unit: link
             service: fleet
           environment:
-            host: FL_SUPERLINK_HOST
-            port: FL_SUPERLINK_PORT
+            host: SUPERLINK_HOST
+            port: SUPERLINK_PORT

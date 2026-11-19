@@ -23,27 +23,39 @@
 # directory), while the comm images need only their own supervisors.
 #
 # Prerequisites:
-#   * the platform base, or a platform checkout to build it from;
-#   * enough disk for two ~8 GiB images (the comm images are ~1 GiB).
+#   * the pinned platform OCI base already pulled into this user's Podman store;
+#   * enough disk for the ML stack, corpus, temporary build layers and four output
+#     images. CPU wheels reduce size, but peak space has not yet been measured.
 #
 # Usage:
 #   scripts/build_hpcshelf_three_level.sh
-#   HPCSHELF_MODEL_ROOT=~/projetos/exp/hpc-shelf/hpcshelf-model \
-#       scripts/build_hpcshelf_three_level.sh
+#   scripts/build_hpcshelf_three_level.sh --show-bases
+#   HPC_UNIT_BASE=localhost/my-validated-base:v1 scripts/build_hpcshelf_three_level.sh
 #
-# This builds and tags locally. It does not push anywhere.
+# This builds and tags locally. It does not push anywhere or build/import Incus
+# images. Root units reuse the Incus archive pinned in three-level-root's
+# artifact.json (platform catalog release 1.4).
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-UNIT_BASE="${HPC_UNIT_BASE:-localhost/podman-unit-base:local}"
-VERSION="${HPC_IMAGE_VERSION:-0.1.0}"
+UNIT_BASE="${HPC_UNIT_BASE:-catalog.hpcshelf.org/hpcshelf/podman-unit-base@sha256:8166b4eed4a9476a91800869042a3e1a5a8a037f09d05fafe771da06364bfad2}"
+VERSION="${HPC_IMAGE_VERSION:-1.21-test}"
 IMAGES_DIR="env/hpcshelf/arms/three-level/images"
 EXEC_CONTAINERFILE="$IMAGES_DIR/Containerfile.flower-exec"
 COMM_CONTAINERFILE="$IMAGES_DIR/Containerfile.flower-comm"
-MODEL_ROOT="${HPCSHELF_MODEL_ROOT:-$HOME/projetos/exp/hpc-shelf/hpcshelf-model}"
+ROOT_ARTIFACT="env/hpcshelf/arms/three-level/components/three-level-root/0.1/artifact.json"
+
+if [[ "${1:-}" == "--show-bases" && "$#" == 1 ]]; then
+    printf 'Podman: %s\nIncus manifest: %s\n' "$UNIT_BASE" "$ROOT_ARTIFACT"
+    cat "$ROOT_ARTIFACT"
+    exit 0
+elif [[ "$#" != 0 ]]; then
+    echo "usage: $0 [--show-bases]" >&2
+    exit 2
+fi
 
 #: image name | role | supervisor file | the line its wrapper must contain
 ROLES=(
@@ -58,18 +70,20 @@ if ! command -v podman >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! podman image exists "$UNIT_BASE"; then
-    if [[ ! -d "$MODEL_ROOT/podman-unit-base" ]]; then
-        echo "error: platform base not found: $UNIT_BASE" >&2
-        echo "       and no platform checkout at $MODEL_ROOT to build it from." >&2
-        echo "       set HPCSHELF_MODEL_ROOT to a clone of hpcshelf-model." >&2
-        exit 1
-    fi
-    echo "==> building platform base $UNIT_BASE from $MODEL_ROOT/podman-unit-base"
-    podman build -t "$UNIT_BASE" "$MODEL_ROOT/podman-unit-base"
+if podman image exists "$UNIT_BASE"; then
+    :
+else
+    status=$?
+    echo "error: platform base unavailable (podman exit $status): $UNIT_BASE" >&2
+    echo "       Pull the pinned image explicitly, with registry access configured:" >&2
+    printf '       podman pull %q\n' "$UNIT_BASE" >&2
+    echo "       Or set HPC_UNIT_BASE to a separately validated local base." >&2
+    echo "       No replacement base will be built under a published identity." >&2
+    exit "$status"
 fi
 
 echo "==> platform base: $UNIT_BASE"
+echo "==> Incus roots reuse the archive in $ROOT_ARTIFACT; no Incus build/import"
 
 for entry in "${ROLES[@]}"; do
     IFS='|' read -r name role supervisor _ <<<"$entry"
@@ -79,17 +93,21 @@ for entry in "${ROLES[@]}"; do
     flower-exec-*)
         containerfile="$EXEC_CONTAINERFILE"
         context="."
+        base_arg="BASE_IMAGE=$UNIT_BASE"
         ;;
     *)
         containerfile="$COMM_CONTAINERFILE"
         context="$IMAGES_DIR"
+        base_arg="UNIT_BASE=$UNIT_BASE"
         ;;
     esac
 
     echo ""
     echo "==> building $tag (role file: ${supervisor}, context: ${context})"
     podman build \
+        --pull-never \
         -f "$containerfile" \
+        --build-arg "$base_arg" \
         --build-arg "SUPERVISOR=${supervisor}" \
         -t "$tag" \
         "$context"

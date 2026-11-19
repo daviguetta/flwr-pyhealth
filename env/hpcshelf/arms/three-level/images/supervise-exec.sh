@@ -43,6 +43,7 @@
 set -euo pipefail
 
 VENV_BIN="${VENV_BIN:-/opt/hpcshelf/app-venv/bin}"
+export PATH="${VENV_BIN}:${PATH}"
 # The plan is generated against protobuf 7.x, so it is parsed with the platform's
 # interpreter, not the application's (Flower declares protobuf <7).
 PLAN_PY="${PLAN_PY:-/opt/hpcshelf/venv/bin/python}"
@@ -123,8 +124,10 @@ supervise_exec() {
     "$VENV_BIN/flower-superexec" \
         --insecure \
         --plugin-type "$PLUGIN_TYPE" \
-        --appio-api-address "$appio_addr" &
+        --appio-api-address "$appio_addr" \
+        >>/tmp/flower-superexec.log 2>&1 &
     exec_pid=$!
+    log "SuperExec iniciado: pid=$exec_pid"
 }
 
 supervise_exec
@@ -133,8 +136,12 @@ supervise_exec
 # cheap and does not disturb the nested unit, which this unit's UnitAgent owns.
 while true; do
     if ! kill -0 "$exec_pid" 2>/dev/null; then
-        wait "$exec_pid" 2>/dev/null || true
-        log "SuperExec exited; restarting"
+        exit_code=0
+        wait "$exec_pid" || exit_code=$?
+
+        log "SuperExec encerrado: pid=$exec_pid exit_code=$exit_code"
+        tail -n 100 /tmp/flower-superexec.log || true
+        log "Reiniciando SuperExec"
         supervise_exec
     fi
     sleep 2

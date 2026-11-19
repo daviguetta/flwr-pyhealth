@@ -34,7 +34,7 @@ metadata:
 spec:
   units:
     exec-server:
-      image: catalog.hpcshelf.org/pyhealth/flower-exec-server:0.1.0
+      image: catalog.hpcshelf.org/pyhealth-federation-three-level/flower-exec-server:0.1.0
 
       replicas:
         min: 1
@@ -55,9 +55,10 @@ spec:
           # Must equal the `comunicacao` node count and the app's
           # `num-partitions`; `../validate.py` refuses drift.
           PYHEALTH_NUM_PARTITIONS: "2"
+          PYHEALTH_EHR_ROOT: "/application/data"
 
     exec-client:
-      image: catalog.hpcshelf.org/pyhealth/flower-exec-client:0.1.0
+      image: catalog.hpcshelf.org/pyhealth-federation-three-level/flower-exec-client:0.1.0
 
       replicas:
         min: 1
@@ -71,6 +72,7 @@ spec:
           # The ClientApp is the only process of this arm that reads patient
           # records, and it reads them from inside this unit.
           PYHEALTH_PARTITION_SCHEME: "uniform"
+          PYHEALTH_EHR_ROOT: "/application/data"
 
   nestedComponents:
     comm:

@@ -28,8 +28,8 @@ spec:
     institution:
       instances:
         - replica: 0
-          host: host-hub
+          host: flower-host-server
         - replica: 1
-          host: host-a
+          host: flower-host-client-a
         - replica: 2
-          host: host-b
+          host: flower-host-client-b

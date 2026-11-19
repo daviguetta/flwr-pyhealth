@@ -34,6 +34,7 @@
 # Environment:
 #   FL_APPIO_PORT            injected by the descriptor (`services.*.environment.port`)
 #   FL_FLEET_PORT            injected by the descriptor (link only)
+#   FL_CONTROL_PORT          injected by the descriptor (control only)
 #   SUPERLINK_HOST / _PORT   injected by the platform from the `link.fleet`
 #                            dependency (node only)
 #   PYHEALTH_NUM_PARTITIONS  optional; appended to node-config when set
@@ -56,6 +57,7 @@
 set -euo pipefail
 
 VENV_BIN="${VENV_BIN:-/opt/hpcshelf/app-venv/bin}"
+export PATH="${VENV_BIN}:${PATH}"
 # The unit plan is generated against protobuf 7.x, so it is parsed with the
 # platform's interpreter, not the application's (Flower pins protobuf <7).
 PLAN_PY="${PLAN_PY:-/opt/hpcshelf/venv/bin/python}"
@@ -86,13 +88,15 @@ link)
     # listener and the descriptor cannot drift apart.
     appio_port="${FL_APPIO_PORT:-9091}"
     fleet_port="${FL_FLEET_PORT:-9092}"
+    control_port="${FL_CONTROL_PORT:-9093}"
 
-    log "starting SuperLink (fleet=0.0.0.0:${fleet_port} appio=0.0.0.0:${appio_port})"
+    log "starting SuperLink (fleet=0.0.0.0:${fleet_port} appio=0.0.0.0:${appio_port}) control=0.0.0.0:${control_port}"
     exec "$VENV_BIN/flower-superlink" \
         --insecure \
         --isolation process \
         --fleet-api-address "0.0.0.0:${fleet_port}" \
-        --serverappio-api-address "0.0.0.0:${appio_port}"
+        --serverappio-api-address "0.0.0.0:${appio_port}" \
+        --control-api-address "0.0.0.0:${control_port}"
     ;;
 
 node)

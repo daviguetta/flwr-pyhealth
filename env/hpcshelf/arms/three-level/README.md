@@ -158,8 +158,78 @@ differ in topology and nothing else.
 
 ## Running the three proofs
 
+### Platform bases (updated 2026-10-16)
+
+CPU-only hosts: both exec roles now install `torch==2.7.1+cpu` and
+`torchvision==0.22.1+cpu` from the official CPU index before the remaining
+application dependencies. `images/constraints-cpu.txt` also constrains the
+PyHealth install so its transitive dependencies cannot replace this pair with
+CUDA wheels. The final build step imports both libraries, checks their exact
+CPU versions, rejects CUDA-enabled torch and rejects installed `nvidia-*`
+packages in the application venv. The UnitAgent venv is untouched. The comm
+images have no torch installation and are unchanged. The grouped arm and
+`uv.lock` are unchanged; comparisons must record this CPU-wheel variant.
+Official compatible versions: https://pytorch.org/get-started/previous-versions/
+
+The CPU adjustment is recipe-tested offline, not a successful rebuilt image or
+a full dependency-resolution acceptance. It reduces CUDA dependencies but does
+not guarantee enough disk space for the remaining ML stack and build layers.
+
+The build now uses the latest **validated platform release recorded in this
+checkout**, catalog 1.4, not a moving `latest` tag:
+
+- OCI: `catalog.hpcshelf.org/hpcshelf/podman-unit-base:acceptance-20260911-cleanup1`,
+  selected by manifest digest
+  `sha256:8166b4eed4a9476a91800869042a3e1a5a8a037f09d05fafe771da06364bfad2`.
+- Incus: `hpcshelf-unit-base`, fingerprint
+  `a17c7d8d68867bec712966affcceea220a55f39cb834f710a4a2bc87475b33ba`.
+  `components/three-level-root/0.1/artifact.json` reuses its published unified
+  archive metadata and binds it to this arm's own descriptor digest. The script
+  does not rebuild, download or import this root image. Include this manifest
+  alongside the root descriptor when preparing the candidate catalog; the OCI
+  units still need their own manifests after build/publication. This is not a
+  complete published catalog or a real deployment acceptance.
+
+Inspect the references without invoking Podman or Incus:
+
 ```bash
-scripts/build_hpcshelf_three_level.sh                            # 4 images + role guard
+scripts/build_hpcshelf_three_level.sh --show-bases
+```
+
+Before building, explicitly pull the pinned OCI base as the same user that runs
+the build (configure registry access/trust first):
+
+```bash
+podman pull catalog.hpcshelf.org/hpcshelf/podman-unit-base@sha256:8166b4eed4a9476a91800869042a3e1a5a8a037f09d05fafe771da06364bfad2
+```
+
+If the base is absent or Podman fails, the script stops: it never builds a
+replacement under a published identity. `HPC_UNIT_BASE` permits an explicitly
+validated alternative; it is passed as `BASE_IMAGE` to the exec Containerfile and
+`UNIT_BASE` to the comm Containerfile. Builds use `--pull-never` for the base
+(compatible with Podman 3.4, where `--pull` is a boolean, not a policy string);
+package installation still needs network access. The two Containerfiles also
+default to the same digest when invoked directly.
+
+`HPC_IMAGE_VERSION` selects **Flower output tags**, independently of the platform
+base version. The user's current default `1.21-test` is preserved. The descriptors
+and smoke scripts still expect `0.1.0`; use `HPC_IMAGE_VERSION=0.1.0` to match them,
+or coordinate a new application version before publication. Never overwrite an
+already published version. Check available disk before building: the exec images
+carry a large ML stack and the demo corpus. The updated recipe has only been
+checked offline with a simulated runtime, not rebuilt or deployed with Flower.
+
+Verification of this update: six offline build-command regressions passed
+(`python tests/test_hpcshelf_three_level_build.py -v`), Bash syntax and diff checks
+passed, and the platform's catalog models validated the new root manifest's
+descriptor digest and exact equality to release 1.4's Incus image/archive entry.
+The historical 39-check validator was also attempted, but the available platform
+Python 3.10 environment lacks `tomllib`; it stopped at import, before any checks.
+Rerun it with the documented Python 3.12 environment and platform dependencies;
+the historical result below is not a fresh acceptance of the updated images.
+
+```bash
+HPC_IMAGE_VERSION=0.1.0 scripts/build_hpcshelf_three_level.sh      # 4 images + role guard
 HPCSHELF_MODEL_ROOT=~/projetos/exp/hpc-shelf/hpcshelf-model \
     scripts/validate_hpcshelf_three_level.sh                      # 39 checks
 scripts/smoke_hpcshelf_three_level.sh                             # 22 checks

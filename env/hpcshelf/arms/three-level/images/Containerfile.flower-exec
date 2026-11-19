@@ -26,7 +26,7 @@
 #
 # See env/hpcshelf/arms/three-level/README.md.
 
-ARG BASE_IMAGE=localhost/podman-unit-base:local
+ARG BASE_IMAGE=catalog.hpcshelf.org/hpcshelf/podman-unit-base@sha256:8166b4eed4a9476a91800869042a3e1a5a8a037f09d05fafe771da06364bfad2
 FROM ${BASE_IMAGE}
 
 # This unit hosts children, so the nested runtime is ON and podman is REAL. The
@@ -46,8 +46,9 @@ COPY pyproject.toml ./
 COPY flower_app ./flower_app
 COPY libs ./libs
 
-# The same application stack as the grouped arm, pinned to the same versions as
-# `uv.lock`, so the three-level arm isolates the topology and nothing else.
+# Same upstream torch/torchvision versions as uv.lock, but CPU wheels for the
+# CPU-only study-case hosts. This explicit variant differs from the grouped arm;
+# no GPU support or numerical equivalence between variants is claimed here.
 #
 # `flwr` without the simulation extra: this is the deployment runtime, not Ray.
 # It provides all three CLIs (flower-superlink, flower-supernode,
@@ -57,12 +58,18 @@ COPY libs ./libs
 # the DP strategies import but the privacy budget (epsilon) cannot be reported.
 # Not fixed here on purpose — fixing it in one arm only would confound the
 # three-level arm. Registered in this arm's README.
+COPY env/hpcshelf/arms/three-level/images/constraints-cpu.txt /opt/hpcshelf/constraints-cpu.txt
 RUN /opt/hpcshelf/app-venv/bin/pip install --no-cache-dir --disable-pip-version-check \
+        --index-url https://download.pytorch.org/whl/cpu \
+        -r /opt/hpcshelf/constraints-cpu.txt \
+    && /opt/hpcshelf/app-venv/bin/pip install --no-cache-dir --disable-pip-version-check \
+        -c /opt/hpcshelf/constraints-cpu.txt \
         "flwr==1.34.0" \
         "numpy==2.2.6" \
         "pyhealth==2.0.1" \
-        "torch==2.7.1" \
-    && /opt/hpcshelf/app-venv/bin/pip install --no-cache-dir --no-deps .
+    && /opt/hpcshelf/app-venv/bin/pip install --no-cache-dir --no-deps . \
+    && /opt/hpcshelf/app-venv/bin/python -c \
+        'import torch, torchvision; from importlib.metadata import distributions; assert torch.__version__ == "2.7.1+cpu", torch.__version__; assert torchvision.__version__ == "0.22.1+cpu", torchvision.__version__; assert torch.version.cuda is None, torch.version.cuda; gpu = [d.metadata["Name"] for d in distributions() if d.metadata["Name"].lower().startswith("nvidia-")]; assert not gpu, gpu'
 
 COPY data ./data
 
