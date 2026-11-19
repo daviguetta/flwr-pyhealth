@@ -1,0 +1,15 @@
+{
+  "descriptor_digest": "sha256:b2224a06e05aef5bd8c17d68a503865fcfb575c0c05c341df4e18004ec016316",
+  "images": {
+    "institution": {
+      "reference": "hpcshelf-unit-base",
+      "digest": "sha256:a17c7d8d68867bec712966affcceea220a55f39cb834f710a4a2bc87475b33ba",
+      "archive": {
+        "format": "incus-unified",
+        "url": "https://catalog.hpcshelf.org/images/incus/a17c7d8d68867bec712966affcceea220a55f39cb834f710a4a2bc87475b33ba.tar.gz",
+        "sha256": "a17c7d8d68867bec712966affcceea220a55f39cb834f710a4a2bc87475b33ba",
+        "size_bytes": 501192075
+      }
+    }
+  }
+}

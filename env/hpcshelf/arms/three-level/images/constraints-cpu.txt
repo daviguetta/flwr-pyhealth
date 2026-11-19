@@ -1,0 +1,4 @@
+# CPU-only study-case hosts. Keep the compatible torch/torchvision pair pinned
+# during the later PyHealth dependency resolution as well as the initial install.
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu
